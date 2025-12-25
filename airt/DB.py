@@ -613,6 +613,11 @@ class BertFaissVectorDB(DB):
 
         Loads sentence-transformers and FAISS on first use to avoid
         startup overhead when this class isn't instantiated.
+
+        Requires:
+
+        pip install faiss==1.5.3
+
         """
         if self.model is None:
             from sentence_transformers import SentenceTransformer

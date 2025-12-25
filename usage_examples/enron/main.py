@@ -66,7 +66,7 @@ vector_search_tool = TfIdfVectorSearchTool(
 agent = Agent(
     model="gpt-4.1",
     # model="gemini-2.5-flash",
-    tools=[vector_search_tool],
+    retrieve_tools=[vector_search_tool],
 )
 
 # ---------------------------------------------------------

@@ -91,7 +91,7 @@ class Agent:
 
     Args:
         model: LLM model identifier
-        retrieve_tools: List of Tool objects (must have .impl attribute for local execution)
+        tools: List of Tool objects (must have .impl attribute for local execution)
         inst_dir: Path to directory with templates (retrieve.j2, respond.j2)
                   and optional output_schema.json
 
@@ -101,7 +101,7 @@ class Agent:
     def __init__(
         self,
         model: str,
-        retrieve_tools: List[Tool],
+        tools: List[Tool],
         inst_dir: str = "inst/",
     ):
         self.model = model
@@ -133,11 +133,11 @@ class Agent:
 
 
         # Tool registry for retrieval step (excludes output_tool)
-        self.tools = {t.name: t for t in retrieve_tools}
+        self.tools = {t.name: t for t in tools}
 
         # Extract local implementations (must be set as .impl on Tool objects)
         self.local_tool_impls = {
-            t.name: t.impl for t in retrieve_tools if hasattr(t, "impl")
+            t.name: t.impl for t in tools if hasattr(t, "impl")
         }
 
         self.graph = self._build_graph()

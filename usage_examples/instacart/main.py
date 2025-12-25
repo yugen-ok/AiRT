@@ -25,7 +25,7 @@ print(sql_tool.description)
 agent = Agent(
     model="gpt-4.1",
     # model="gemini-2.5-flash",
-    tools=[sql_tool],
+    retrieve_tools=[sql_tool],
 )
 
 # ---------------------------------------------------------

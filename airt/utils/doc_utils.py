@@ -4,6 +4,9 @@ import os
 
 
 def read_pdf(path):
+
+    # Requires:
+    # pip install PyPDF2==3.0.1
     from PyPDF2 import PdfReader # Including it here to not trigger global requirement
 
     assert path.lower().endswith(".pdf")

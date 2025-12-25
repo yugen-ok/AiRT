@@ -207,8 +207,8 @@ vector_search_tool = TfIdfVectorSearchTool(
 from airt.Agent import Agent
 
 agent = Agent(
-    model="gpt-4.1",
-    tools=[vector_search_tool],
+  model="gpt-4.1",
+  retrieve_tools=[vector_search_tool],
 )
 ```
 
