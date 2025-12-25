@@ -1,3 +1,13 @@
+"""
+
+Demonstrates basic agent with SQL-based retrieval.
+
+Download data from: https://www.kaggle.com/datasets/psparks/instacart-market-basket-analysis/data
+
+
+"""
+
+
 from airt.Tool import SQLDBTool
 from airt.Agent import Agent
 

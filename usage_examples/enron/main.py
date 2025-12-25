@@ -1,3 +1,10 @@
+"""
+Demonstrates basic agent with tf-idf vector search retireval.
+
+Download data from: https://www.kaggle.com/datasets/wcukierski/enron-email-dataset
+"""
+
+
 import json
 import random
 from pprint import pprint
