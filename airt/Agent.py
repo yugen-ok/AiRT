@@ -43,8 +43,8 @@ from pathlib import Path
 from jsonschema import validate, ValidationError
 
 from .Tool import Tool
-from airt.utils.utils import jsonschema_to_pydantic_model
-from airt.utils.llm_utils import query_llm, render_template
+from .utils.utils import jsonschema_to_pydantic_model
+from .utils.llm_utils import query_llm, render_template
 
 
 # =========================================================
@@ -83,7 +83,7 @@ class Agent:
     Attributes:
         model: LLM model identifier (e.g., "gpt-4", "gemini-2.0-flash-exp")
         inst_dir: Directory containing Jinja2 templates and output_schema.json
-        tools: Dictionary mapping tool names to Tool objects
+        retrieve_tools: Dictionary mapping tool names to Tool objects
         local_tool_impls: Dictionary mapping tool names to their .run() implementations
         output_schema: JSONSchema dict for response validation (if output_schema.json exists)
         output_tool: Tool wrapper for structured output (used in respond step)
@@ -101,7 +101,7 @@ class Agent:
     def __init__(
         self,
         model: str,
-        retrieve_tools: List[Tool],
+        retrieve_tools: List[Tool] = None,
         inst_dir: str = "inst/",
     ):
         self.model = model
@@ -125,7 +125,6 @@ class Agent:
                 name="final_answer",
                 description="Produce the final structured response",
                 input_schema=OutputModel,  # This is the actual output schema
-                output_schema=OutputModel,  # Unused (not a real tool)
                 kind="native",
             )
         else:
@@ -133,7 +132,7 @@ class Agent:
 
 
         # Tool registry for retrieval step (excludes output_tool)
-        self.tools = {t.name: t for t in retrieve_tools}
+        self.retrieve_tools = {t.name: t for t in retrieve_tools}
 
         # Extract local implementations (must be set as .impl on Tool objects)
         self.local_tool_impls = {
@@ -157,6 +156,7 @@ class Agent:
             Compiled StateGraph ready for invocation
         """
         g = StateGraph(AgentState)
+
 
         g.add_node("retrieve", self._retrieve)
         g.add_node("respond", self._respond)
@@ -206,7 +206,7 @@ class Agent:
             system_prompt="",
             user_inputs=[prompt],
             model=self.model,
-            tools=list(self.tools.values()),  # Passes Tool metadata (name, description, schema)
+            tools=list(self.retrieve_tools.values()),  # Passes Tool metadata (name, description, schema)
             require_tool=True  # Forces tool call (no free-text responses)
         )
 
@@ -223,7 +223,7 @@ class Agent:
             return {"error": f"No local impl for tool {name}"}
 
         # Validate arguments against tool's input schema
-        tool_def = self.tools.get(name)
+        tool_def = self.retrieve_tools.get(name)
         if tool_def is None:
             return {"error": f"Unknown tool selected: {name}"}
 

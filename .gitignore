@@ -6,6 +6,7 @@ airt/scratch.py
 **/llm_cache/
 **/.idea/
 **/__pycache__
+**/lbgpt_cache/
 
 notes.txt
 .env

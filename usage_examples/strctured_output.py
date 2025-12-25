@@ -57,6 +57,7 @@ result = query_llm(
     ],
     model="gpt-4.1",
     # model="gemini-2.5-flash",
+    # model='claude-3-opus-20240229',
     temperature=0,
     tools=[create_event_tool]
 )

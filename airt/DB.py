@@ -34,7 +34,7 @@ import shutil
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-from airt.utils.doc_utils import chunk_text_sliding
+from .utils.doc_utils import chunk_text_sliding
 
 
 class DB:
