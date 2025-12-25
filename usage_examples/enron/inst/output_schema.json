@@ -1,0 +1,17 @@
+{
+  "type": "object",
+  "properties": {
+    "answer": {
+      "type": "string",
+      "description": "Final answer to the task"
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Short excerpts or identifiers from retrieved documents used in the answer"
+    }
+  },
+  "required": ["answer"]
+}

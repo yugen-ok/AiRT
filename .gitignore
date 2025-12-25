@@ -1,0 +1,11 @@
+airt/scratch.py
+
+**/recycle_bin/
+**/data/
+**/output/
+**/llm_cache/
+**/.idea/
+**/__pycache__
+
+notes.txt
+.env
