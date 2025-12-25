@@ -1,5 +1,5 @@
 
-from airt.utils.llm_utils import query_llm
+from airt.query_llm import query_llm
 from airt.Tool import TfIdfVectorSearchTool, VectorSearchInput
 
 docs = [

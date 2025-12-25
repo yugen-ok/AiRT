@@ -44,7 +44,7 @@ from jsonschema import validate, ValidationError
 
 from .Tool import Tool
 from .utils.utils import jsonschema_to_pydantic_model
-from .utils.llm_utils import query_llm, render_template
+from .query_llm import query_llm, render_template
 
 
 # =========================================================

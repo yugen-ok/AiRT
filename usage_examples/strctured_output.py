@@ -15,7 +15,7 @@ and then queries the LLM with a user input, which is then parsed into the schema
 from pydantic import BaseModel
 
 from airt.Tool import Tool
-from airt.utils.llm_utils import query_llm
+from airt.query_llm import query_llm
 
 
 # -------------------------
