@@ -18,8 +18,7 @@ dependencies = [
     "pandas>=2.3.3",
     "protobuf>=6.33.2",
     "pydantic>=2.12.5",
-    "scikit-learn>=1.8.0",
-    "sentence-transformers>=5.2.0",
+    "scikit-learn>=1.8.0"
 ]
 
 [tool.setuptools]

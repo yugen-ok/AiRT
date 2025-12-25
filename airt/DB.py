@@ -616,7 +616,8 @@ class BertFaissVectorDB(DB):
 
         Requires:
 
-        pip install faiss==1.5.3
+        pip install faiss==1.5.3 sentence_transformers==5.2.0
+
 
         """
         if self.model is None:

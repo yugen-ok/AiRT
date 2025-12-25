@@ -9,4 +9,3 @@ pandas==2.3.3
 protobuf==6.33.2
 pydantic==2.12.5
 scikit_learn==1.8.0
-sentence_transformers==5.2.0
