@@ -1,10 +1,10 @@
 
 import re
 import os
-import json
-from PyPDF2 import PdfReader
+
 
 def read_pdf(path):
+    from PyPDF2 import PdfReader # Including it here to not trigger global requirement
 
     assert path.lower().endswith(".pdf")
     print(f"processing {path}")

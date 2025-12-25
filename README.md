@@ -241,15 +241,32 @@ This is critical for downstream automation.
 
 ---
 
+
+## Third-Party API Keys
+
+
+`utils.llm_utils.query_llm()` accepts an `api_key` parameter, and if your environment contains any of the keys:
+
+* `OPENAI_API_KEY`
+* `GEMINI_API_KEY`
+* `ANTHROPIC_API_KEY`
+
+it will recognize them automatically.
+
+---
+
 ## Planned Features:
 
 AiRT intentionally leaves space for:
 
 * Iterative reasoning about retrieved results until satisfied
 * Web search
+* Caching the output of each step for traceability
 * Hierarchical topic-based filtering
 * Evaluation / scoring
 * Abstention policies
+* Context-aware chunking and vectorization
+* Image processing
 * Human-in-the-loop
 * Task-specific retrieval
 * Permission-awareness

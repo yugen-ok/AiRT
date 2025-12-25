@@ -3,7 +3,6 @@ from pydantic import BaseModel
 from jsonschema import validate as js_validate, ValidationError as JSValidationError
 
 
-
 def jsonschema_to_pydantic_model(name: str, schema: dict) -> Type[BaseModel]:
     """
     Returns a BaseModel subclass that:
