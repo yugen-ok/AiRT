@@ -193,7 +193,7 @@ def query_llm(
     system_prompt: str = "",
     user_inputs: Optional[List[str]] = None,
     *,
-    cache: Optional[str] = "llm_cache",
+    cache: Optional[str] = "output/",
     api_key: Optional[str] = None,
     model: str = "gpt-4.1",
     temperature: float = 0.7,

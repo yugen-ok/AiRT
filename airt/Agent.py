@@ -100,6 +100,7 @@ class AgentState(BaseModel):
         decision: Latest controller decision ({"action": "retrieve" | "answer"})
         error: Error message if any step fails (None if no errors)
         retrieve_steps: Number of retrieval executions completed (default: 0)
+        tool_call_history: List of previous tool calls with their results from retrieve steps
     """
     task: str
     retrieved: Optional[Any]
@@ -107,6 +108,7 @@ class AgentState(BaseModel):
     decision: Optional[dict] = None
     error: Optional[str]
     retrieve_steps: int = 0
+    tool_call_history: List[dict] = []
 
 
 
@@ -300,9 +302,14 @@ class Agent:
         )
 
         # Render prompt from template
+        template_context = {
+            "task": state.task,
+            "tool_call_history": state.tool_call_history
+        }
+
         prompt = render_template(
             f"{self.inst_dir}/retrieve.j2",
-            {"task": state.task},
+            template_context,
         )
 
         self._debug(
@@ -356,7 +363,29 @@ class Agent:
             )
         )
 
-        update = {"retrieved": result, "retrieve_steps": state.retrieve_steps + 1}
+        # Record this tool call in history
+        tool_call_record = {
+            "tool_name": name,
+            "arguments": args,
+
+        }
+
+        # Accumulate matches from this retrieval with previous matches
+        if state.retrieved is None:
+            # First retrieval - use result as-is
+            accumulated_retrieved = result
+        else:
+            # Subsequent retrievals - merge matches
+            accumulated_retrieved = state.retrieved
+            if hasattr(result, "matches") and hasattr(accumulated_retrieved, "matches"):
+                # Append new matches to existing ones
+                accumulated_retrieved.matches = accumulated_retrieved.matches + result.matches
+
+        update = {
+            "retrieved": accumulated_retrieved,
+            "retrieve_steps": state.retrieve_steps + 1,
+            "tool_call_history": state.tool_call_history + [tool_call_record]
+        }
 
         if self.verbose and "retrieved" not in update:
             print("[WARN] RETRIEVE did not update `retrieved`")
@@ -615,9 +644,9 @@ class Agent:
             lines.append(f"\n{key}:")
             try:
                 lines.append(json.dumps(value, indent=2, ensure_ascii=False))
+
             except Exception:
                 lines.append(str(value))
-
         lines.append("=" * 80)
 
         text = "\n".join(lines)
@@ -673,7 +702,7 @@ class Agent:
             RuntimeError: If any graph node returns an error or validation fails
 
         Example:
-            >>> agent.run("What are the key findings about climate change?")
+            agent.run("What are the key findings about climate change?")
             {
                 'tool_name': 'final_answer',
                 'arguments': {
@@ -689,6 +718,7 @@ class Agent:
             "error": None,
             "decision": None,
             "retrieve_steps": 0,
+            "tool_call_history": [],
         }
 
         # Invoke graph (synchronous execution)
