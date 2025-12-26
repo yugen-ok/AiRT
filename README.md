@@ -99,11 +99,15 @@ You can switch models without rewriting your application logic.
 
 Task (string)
 ↓
+[ Decide Node ]
+→ Determines if more retrieval is needed
+→ Enforces hard limits (max steps, max chars)
+↓ (if more retrieval needed)
 [ Retrieve Node ]
 → LLM selects a tool
 → Tool executes locally
 → Structured retrieval result
-↓
+↓ (loop back to Decide or continue to Respond)
 [ Respond Node ]
 → LLM synthesizes an answer
 → Output is schema-validated
@@ -151,12 +155,14 @@ Both can be used *without* the LLM for testing.
 ---
 
 ### `Agent`
-A minimal execution graph with three nodes:
-- `retrieve`
-- `respond`
+A minimal execution graph with four nodes:
+- `decide` (controller for retrieval loop)
+- `retrieve` (LLM-guided tool selection)
+- `respond` (structured answer generation)
 - `eval` (intentionally empty placeholder)
 
 The agent:
+- Controls retrieval iterations with hard limits (max_retrieve_steps, max_retrieved_chars)
 - Selects tools via `query_llm`
 - Validates tool inputs
 - Executes tools locally
@@ -261,7 +267,7 @@ it will recognize them automatically.
 
 AiRT intentionally leaves space for:
 
-* Iterative reasoning about retrieved results until satisfied
+* ~~Iterative reasoning about retrieved results until satisfied~~ ✓ (implemented via decide node)
 * Web search
 * Caching the output of each step for traceability
 * Hierarchical topic-based filtering

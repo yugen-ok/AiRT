@@ -20,9 +20,9 @@ Example:
      tool = TfIdfVectorSearchTool(docs=docs, save_path="vdb.pkl")
 
      # Initialize agent with instructions directory containing:
-     #   - retrieve.j2: prompt for tool selection
-     #   - respond.j2: prompt for generating response
-     #   - output_schema.json: JSONSchema for structured output
+     # - retrieve.j2: prompt for tool selection
+     # - respond.j2: prompt for generating response
+     # - output_schema.json: JSONSchema for structured output
      agent = Agent(
          model="gpt-4",
          retrieve_tools=[tool],
@@ -95,16 +95,19 @@ class AgentState(BaseModel):
 
     Attributes:
         task: The user's task or query to be processed
-        retrieved: Context retrieved from tools (e.g., VectorSearchOutput)
-        response: Final structured response from the agent
-        error: Error message if any step fails
+        retrieved: Context retrieved from tools (e.g., VectorSearchOutput with matches)
+        response: Final structured response from the agent (tool call dict with arguments)
+        decision: Latest controller decision ({"action": "retrieve" | "answer"})
+        error: Error message if any step fails (None if no errors)
+        retrieve_steps: Number of retrieval executions completed (default: 0)
     """
     task: str
     retrieved: Optional[Any]
     response: Optional[Any]
     decision: Optional[dict] = None
     error: Optional[str]
-    steps: int = 0
+    retrieve_steps: int = 0
+
 
 
 # =========================================================
@@ -117,10 +120,11 @@ class Agent:
 
     The agent follows a graph that adapts based on retrieve_tools:
         - If retrieve_tools is None: respond → eval (no retrieval step)
-        - If retrieve_tools is provided: retrieve → respond → eval
-            1. retrieve: Uses LLM to select and execute tools for information gathering
-            2. respond: Generates structured response based on retrieved context
-            3. eval: Placeholder for quality checks and validation
+        - If retrieve_tools is provided: decide ⇄ retrieve → respond → eval
+            1. decide: Determines whether to retrieve more context or answer now
+            2. retrieve: Uses LLM to select and execute tools for information gathering
+            3. respond: Generates structured response based on retrieved context
+            4. eval: Placeholder for quality checks and validation
 
     Attributes:
         model: LLM model identifier (e.g., "gpt-4", "gemini-2.0-flash-exp")
@@ -130,13 +134,21 @@ class Agent:
         output_schema: JSONSchema dict for response validation (if output_schema.json exists)
         output_tool: Tool wrapper for structured output (used in respond step)
         graph: Compiled LangGraph StateGraph
+        max_retrieve_steps: Maximum number of retrieval iterations allowed
+        max_retrieved_chars: Maximum total characters allowed in retrieved context
+        verbose: Whether to print debug information
+        log_path: Optional path to log file for debug output
 
     Args:
         model: LLM model identifier
         retrieve_tools: List of Tool objects (must have .impl attribute for local execution).
                        If None, the retrieve step is skipped entirely.
-        inst_dir: Path to directory with templates (retrieve.j2, respond.j2)
+        inst_dir: Path to directory with templates (decide.j2, retrieve.j2, respond.j2)
                   and optional output_schema.json
+        max_retrieve_steps: Maximum number of retrieval executions (default: 1)
+        max_retrieved_chars: Maximum total characters in retrieved context (default: 8000)
+        verbose: Enable debug output to stdout and optional log file (default: False)
+        log_path: Path to log file for debug output (requires verbose=True)
 
     Raises:
         RuntimeError: If task execution fails or output validation fails
@@ -147,14 +159,16 @@ class Agent:
             model: str,
             retrieve_tools: List[Tool] = None,
             inst_dir: str = "inst/",
-            max_decide_steps: int = 0,
+            max_retrieve_steps: int = 1,
+            max_retrieved_chars: int = 8000,
             verbose: bool = False,
             log_path: Optional[str] = None
     ):
 
         self.model = model
         self.inst_dir = inst_dir
-        self.max_decide_steps = max_decide_steps
+        self.max_retrieve_steps = max_retrieve_steps
+        self.max_retrieved_chars = max_retrieved_chars
         self.verbose = verbose
         self.log_path = log_path
         self._log_file = None
@@ -205,30 +219,29 @@ class Agent:
     # =====================================================
 
     def _build_graph(self):
+        """
+        Constructs the LangGraph execution graph based on retrieval requirements.
+
+        Builds one of two graph structures:
+            - No retrieval: respond → eval → END
+            - With retrieval: decide ⇄ retrieve → respond → eval → END
+
+        Returns:
+            Compiled StateGraph ready for execution
+        """
         g = StateGraph(AgentState)
 
         g.add_node("respond", self._respond)
         g.add_node("eval", self._eval)
 
-        # ---- CASE 1: no retrieval at all ----
+        # ---- CASE: no retrieval at all ----
         if self.retrieve_tools is None:
             g.set_entry_point("respond")
             g.add_edge("respond", "eval")
             g.add_edge("eval", END)
             return g.compile()
 
-        # ---- CASE 2: retrieval but NO decision loop ----
-        if self.max_decide_steps == 0:
-            g.add_node("retrieve", self._retrieve)
-
-            g.set_entry_point("retrieve")
-            g.add_edge("retrieve", "respond")
-            g.add_edge("respond", "eval")
-            g.add_edge("eval", END)
-
-            return g.compile()
-
-        # ---- CASE 3: retrieval + decision loop ----
+        # ---- Unified retrieval graph: decide <-> retrieve loop ----
         g.add_node("decide", self._decide)
         g.add_node("retrieve", self._retrieve)
 
@@ -236,12 +249,7 @@ class Agent:
 
         g.add_conditional_edges(
             "decide",
-            lambda state: (
-                "answer"
-                if state.steps > self.max_decide_steps
-                else state.decision["action"]
-            )
-            ,
+            lambda state: state.decision["action"],
             {
                 "retrieve": "retrieve",
                 "answer": "respond",
@@ -249,34 +257,6 @@ class Agent:
         )
 
         g.add_edge("retrieve", "decide")
-        g.add_edge("respond", "eval")
-        g.add_edge("eval", END)
-
-        return g.compile()
-
-    def __build_graph(self):
-        """
-        Constructs the LangGraph execution graph.
-
-        Creates a pipeline that adapts based on retrieve_tools:
-            - If retrieve_tools is None: respond → eval → END
-            - If retrieve_tools is provided: retrieve → respond → eval → END
-
-        Returns:
-            Compiled StateGraph ready for invocation
-        """
-        g = StateGraph(AgentState)
-
-        g.add_node("respond", self._respond)
-        g.add_node("eval", self._eval)
-
-        if self.retrieve_tools is not None:
-            g.add_node("retrieve", self._retrieve)
-            g.set_entry_point("retrieve")
-            g.add_edge("retrieve", "respond")
-        else:
-            g.set_entry_point("respond")
-
         g.add_edge("respond", "eval")
         g.add_edge("eval", END)
 
@@ -376,7 +356,7 @@ class Agent:
             )
         )
 
-        update = {"retrieved": result}
+        update = {"retrieved": result, "retrieve_steps": state.retrieve_steps + 1}
 
         if self.verbose and "retrieved" not in update:
             print("[WARN] RETRIEVE did not update `retrieved`")
@@ -384,11 +364,70 @@ class Agent:
         return update
 
     def _decide(self, state: AgentState):
+        """
+        Decide node: Determines whether to retrieve more context or proceed to answer.
 
+        Implements hard limits to prevent excessive retrieval:
+            1. Max retrieve steps: Forces "answer" if retrieve_steps >= max_retrieve_steps
+            2. Max retrieved chars: Forces "answer" if total chars >= max_retrieved_chars
+            3. First retrieval: Forces "retrieve" if no context has been gathered yet
+            4. LLM decision: Asks LLM whether more retrieval is needed when within limits
+
+        Args:
+            state: Current AgentState with task, retrieved context, and retrieve_steps count
+
+        Returns:
+            Dict with "decision" key containing {"action": "retrieve" | "answer"}
+        """
+        # Hard stop: never exceed max_retrieve_steps retrieval executions
+        if state.retrieve_steps >= self.max_retrieve_steps:
+            decision = {"action": "answer"}
+            self._debug(
+                "DECIDE / HARD STOP (STEPS)",
+                task=state.task,
+                retrieve_steps=state.retrieve_steps,
+                max_retrieve_steps=self.max_retrieve_steps,
+                decision=decision
+            )
+            return {"decision": decision}
+
+        # Hard stop: never exceed max_retrieved_chars total character length
+        current_chars = 0
+        if state.retrieved is not None:
+            # Assuming matches have a 'content' or similar text field; 
+            # calculating total length of all match dumps for a conservative estimate.
+            current_chars = sum(len(str(m)) for m in state.retrieved.matches)
+
+        if current_chars >= self.max_retrieved_chars:
+            decision = {"action": "answer"}
+            self._debug(
+                "DECIDE / HARD STOP (CHARS)",
+                task=state.task,
+                current_chars=current_chars,
+                max_retrieved_chars=self.max_retrieved_chars,
+                decision=decision
+            )
+            return {"decision": decision}
+
+        # If retrieval is still allowed and we have no retrieved context yet, force the first retrieval.
+        if state.retrieved is None:
+            decision = {"action": "retrieve"}
+            self._debug(
+                "DECIDE / FIRST RETRIEVE",
+                task=state.task,
+                retrieve_steps=state.retrieve_steps,
+                max_retrieve_steps=self.max_retrieve_steps,
+                decision=decision
+            )
+            return {"decision": decision}
+
+        # Otherwise, we already have context and we still have remaining retrieval budget.
+        # Now ask the LLM whether more retrieval is needed or we can answer.
         self._debug(
             "DECIDE / INPUT STATE",
             task=state.task,
-            steps=state.steps,
+            retrieve_steps=state.retrieve_steps,
+            max_retrieve_steps=self.max_retrieve_steps,
             matches=(
                 [m.model_dump() for m in state.retrieved.matches]
                 if state.retrieved is not None
@@ -431,20 +470,11 @@ class Agent:
             schema=decide_schema
         )
 
-        next_steps = state.steps
-        if result["arguments"]["action"] == "retrieve":
-            next_steps += 1
+        # Note: retrieve_steps is incremented in _retrieve, not here.
+        update = {"decision": result["arguments"]}
 
-        update = {
-            "decision": result["arguments"],
-            "steps": next_steps
-        }
-
-        if self.verbose:
-            if "decision" not in update:
-                print("[WARN] DECIDE did not update `decision`")
-            if update["steps"] == state.steps:
-                print("[INFO] DECIDE did not increment steps")
+        if self.verbose and "decision" not in update:
+            print("[WARN] DECIDE did not update `decision`")
 
         return update
 
@@ -563,6 +593,16 @@ class Agent:
         return {}
 
     def _debug(self, title: str, **payload):
+        """
+        Outputs debug information to stdout and optional log file.
+
+        Args:
+            title: Section title for the debug output
+            **payload: Key-value pairs to display (auto-formatted as JSON when possible)
+
+        Note:
+            Only outputs when verbose=True. Writes to both stdout and log_path if configured.
+        """
         if not self.verbose:
             return
 
@@ -591,6 +631,12 @@ class Agent:
             self._log_file.flush()
 
     def __del__(self):
+        """
+        Destructor: Safely closes log file if it was opened.
+
+        Note:
+            Uses try-except to prevent errors during interpreter shutdown.
+        """
         if getattr(self, "_log_file", None):
             try:
                 self._log_file.close()
@@ -605,21 +651,29 @@ class Agent:
         """
         Execute the agent workflow for a given task.
 
-        Runs the retrieve→respond→eval pipeline and returns the final structured
-        output or raises an error if any step fails.
+        Executes the appropriate graph based on configuration:
+            - With retrieval: decide ⇄ retrieve → respond → eval
+            - Without retrieval: respond → eval
+
+        The graph enforces hard limits (max_retrieve_steps, max_retrieved_chars) and
+        validates output against output_schema.json if present.
 
         Args:
             task: User's task/query as a string
 
         Returns:
             Structured response dict conforming to output_schema (if defined),
-            or raw LLM output if no schema is specified
+            or raw LLM output if no schema is specified. Format:
+                {
+                    'tool_name': 'final_answer',
+                    'arguments': { ... }  # Conforms to output_schema
+                }
 
         Raises:
             RuntimeError: If any graph node returns an error or validation fails
 
         Example:
-             agent.run("What are the key findings about climate change?")
+            >>> agent.run("What are the key findings about climate change?")
             {
                 'tool_name': 'final_answer',
                 'arguments': {
@@ -634,7 +688,7 @@ class Agent:
             "response": None,
             "error": None,
             "decision": None,
-            "steps": 0,
+            "retrieve_steps": 0,
         }
 
         # Invoke graph (synchronous execution)
@@ -645,4 +699,3 @@ class Agent:
             return result["response"]
 
         raise RuntimeError(result.get("error", "Unknown failure"))
-

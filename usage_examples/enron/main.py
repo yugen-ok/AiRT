@@ -67,7 +67,8 @@ agent = Agent(
     # model="gemini-2.5-flash",
     # model='claude-3-opus-20240229',
     retrieve_tools=[vector_search_tool],
-    max_decide_steps=1,
+    max_retrieve_steps=2,
+    max_retrieved_chars = 100000,
     verbose=True,
     log_path="agent_debug.log"
 )
@@ -77,7 +78,7 @@ agent = Agent(
 # ---------------------------------------------------------
 
 result = agent.run(
-    "Who is asking whom to schedule meetings?"
+    "Who is asking whom to schedule meetings? give at least 20 examples."
 )
 
 pprint(result)
