@@ -1,3 +1,4 @@
+import json
 
 from airt.query_llm import query_llm
 from airt.Tool import TfIdfVectorSearchTool, VectorSearchInput
@@ -25,18 +26,20 @@ result = query_llm(
     # model='claude-3-opus-20240229',
     # model='gemini-2.5-flash',
     tools=[tool],
-    api_key=anth_api_key
 )
 
 tool_name = result.get("tool_name")
 tool_args = result.get("arguments")
 
+if type(tool_args) == str:
+    tool_args = json.loads(tool_args)
+
 # -------------------------
 # Execute local TF-IDF search
 # -------------------------
-result = tool.run(
+tool_output = tool.run(
     VectorSearchInput(**tool_args)
 )
 
 # Print the first result
-print(result.matches[0].content)
+print('>>>>', tool_output.matches[0].content)

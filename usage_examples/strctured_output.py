@@ -42,8 +42,6 @@ create_event_tool = Tool(
     name="create_event",
     description="Create a simple calendar event",
     input_schema=CreateEventInput,
-    output_schema=CreateEventOutput,
-    kind="native",
 )
 
 # -------------------------

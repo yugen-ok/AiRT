@@ -1,42 +1,23 @@
 
 from airt.query_llm import query_llm
-from airt.Tool import TfIdfVectorSearchTool, VectorSearchInput
+from airt.Tool import NativeWebSearchTool
 
-docs = [
-    "LangGraph is a framework for building agent workflows.",
-    "Vector databases allow semantic search over documents.",
-    "TF-IDF is a classical information retrieval technique.",
-]
 
 # -------------------------
-# Define tool metadata
+# Define tool
 # -------------------------
-tool = TfIdfVectorSearchTool(
-    docs=docs
-)
+
+tool = NativeWebSearchTool()
 
 # -------------------------
 # Ask LLM to decide tool call
 # -------------------------
 result = query_llm(
-    system_prompt="Use the provided tool if it helps answer the user request.",
-    user_inputs=["Search my vector DB for langgraph."],
-    model="gpt-4.1",
+    system_prompt="Latest news from france with dates",
+    # model="gpt-4.1",
+    model='gemini-2.5-flash',
     # model='claude-3-opus-20240229',
-    # model='gemini-2.5-flash',
     tools=[tool],
-    api_key=anth_api_key
 )
 
-tool_name = result.get("tool_name")
-tool_args = result.get("arguments")
-
-# -------------------------
-# Execute local TF-IDF search
-# -------------------------
-result = tool.run(
-    VectorSearchInput(**tool_args)
-)
-
-# Print the first result
-print(result.matches[0].content)
+print(result)
