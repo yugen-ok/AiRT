@@ -193,7 +193,7 @@ def query_llm(
     system_prompt: str = "",
     user_inputs: Optional[List[str]] = None,
     *,
-    cache: Optional[str] = "output/",
+    cache_dir: Optional[str] = "output/llm_cache/",
     api_key: Optional[str] = None,
     model: str = "gpt-4.1",
     temperature: float = 0.7,
@@ -211,7 +211,7 @@ def query_llm(
     Args:
         system_prompt: System/instruction message (placement varies by provider)
         user_inputs: List of user messages (None/empty = single call with system prompt only)
-        cache: Directory name for diskcache (None = no caching)
+        cache_dir: Directory name for diskcache (None = no caching)
         api_key: Provider API key (falls back to env vars)
         model: Model identifier (e.g., "gpt-4", "gemini-2.0-flash-exp", "claude-3-5-sonnet")
         temperature: Sampling temperature (0.0 = deterministic, 1.0 = creative)
@@ -265,19 +265,19 @@ def query_llm(
     model_lower = model.lower()
     if model_lower.startswith(("gpt-", "o1-")):
         return _query_openai(
-            system_prompt, user_inputs, cache, api_key, model,
+            system_prompt, user_inputs, cache_dir, api_key, model,
             temperature, max_tokens, max_parallel_calls, tools,
             require_tool
         )
     elif model_lower.startswith("gemini-"):
         return _query_gemini(
-            system_prompt, user_inputs, cache, api_key, model,
+            system_prompt, user_inputs, cache_dir, api_key, model,
             temperature, max_tokens, max_parallel_calls, tools,
             require_tool
         )
     elif model_lower.startswith("claude-"):
         return _query_claude(
-            system_prompt, user_inputs, cache, api_key, model,
+            system_prompt, user_inputs, cache_dir, api_key, model,
             temperature, max_tokens, max_parallel_calls, tools,
             require_tool
         )

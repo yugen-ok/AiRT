@@ -20,7 +20,7 @@ Example:
      tool = TfIdfVectorSearchTool(docs=docs, save_path="vdb.pkl")
     
      # Use in agent
-     agent = Agent(model="gpt-4", tools=[tool], inst_dir="inst/")
+     agent = Agent(model="gpt-4", tools=[tool], inst_dir="default_inst/")
      result = agent.run("Find information about authentication")
     
      # Or execute directly
