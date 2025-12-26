@@ -57,6 +57,34 @@ from .utils.utils import jsonschema_to_pydantic_model
 from .query_llm import query_llm, render_template
 
 
+
+
+# =========================================================
+# Generic Tools
+# =========================================================
+
+decide_schema = {
+    "type": "object",
+    "properties": {
+        "action": {
+            "type": "string",
+            "enum": ["retrieve", "answer"]
+        }
+    },
+    "required": ["action"]
+}
+
+DecideModel = jsonschema_to_pydantic_model(
+    "ControllerDecision",
+    decide_schema
+)
+
+decide_tool = Tool(
+    name="decide_next",
+    description="Decide whether more retrieval is needed or we can answer now",
+    input_schema=DecideModel,
+)
+
 # =========================================================
 # Graph State
 # =========================================================
@@ -74,7 +102,9 @@ class AgentState(BaseModel):
     task: str
     retrieved: Optional[Any]
     response: Optional[Any]
+    decision: Optional[dict] = None
     error: Optional[str]
+    steps: int = 0
 
 
 # =========================================================
@@ -111,14 +141,26 @@ class Agent:
     Raises:
         RuntimeError: If task execution fails or output validation fails
     """
+
     def __init__(
-        self,
-        model: str,
-        retrieve_tools: List[Tool] = None,
-        inst_dir: str = "inst/",
+            self,
+            model: str,
+            retrieve_tools: List[Tool] = None,
+            inst_dir: str = "inst/",
+            max_decide_steps: int = 0,
+            verbose: bool = False,
+            log_path: Optional[str] = None
     ):
+
         self.model = model
         self.inst_dir = inst_dir
+        self.max_decide_steps = max_decide_steps
+        self.verbose = verbose
+        self.log_path = log_path
+        self._log_file = None
+
+        if self.verbose and self.log_path is not None:
+            self._log_file = open(self.log_path, "a", encoding="utf8")
 
         # Load output schema if present for hard validation
         schema_path = Path(inst_dir) / "output_schema.json"
@@ -163,6 +205,56 @@ class Agent:
     # =====================================================
 
     def _build_graph(self):
+        g = StateGraph(AgentState)
+
+        g.add_node("respond", self._respond)
+        g.add_node("eval", self._eval)
+
+        # ---- CASE 1: no retrieval at all ----
+        if self.retrieve_tools is None:
+            g.set_entry_point("respond")
+            g.add_edge("respond", "eval")
+            g.add_edge("eval", END)
+            return g.compile()
+
+        # ---- CASE 2: retrieval but NO decision loop ----
+        if self.max_decide_steps == 0:
+            g.add_node("retrieve", self._retrieve)
+
+            g.set_entry_point("retrieve")
+            g.add_edge("retrieve", "respond")
+            g.add_edge("respond", "eval")
+            g.add_edge("eval", END)
+
+            return g.compile()
+
+        # ---- CASE 3: retrieval + decision loop ----
+        g.add_node("decide", self._decide)
+        g.add_node("retrieve", self._retrieve)
+
+        g.set_entry_point("decide")
+
+        g.add_conditional_edges(
+            "decide",
+            lambda state: (
+                "answer"
+                if state.steps > self.max_decide_steps
+                else state.decision["action"]
+            )
+            ,
+            {
+                "retrieve": "retrieve",
+                "answer": "respond",
+            }
+        )
+
+        g.add_edge("retrieve", "decide")
+        g.add_edge("respond", "eval")
+        g.add_edge("eval", END)
+
+        return g.compile()
+
+    def __build_graph(self):
         """
         Constructs the LangGraph execution graph.
 
@@ -216,10 +308,26 @@ class Agent:
             The LLM acts as a tool selector, not a traditional agent. This ensures
             deterministic retrieval based on the task description.
         """
+
+        self._debug(
+            "RETRIEVE / INPUT STATE",
+            task=state.task,
+            retrieved=(
+                state.retrieved.model_dump()
+                if hasattr(state.retrieved, "model_dump")
+                else state.retrieved
+            )
+        )
+
         # Render prompt from template
         prompt = render_template(
             f"{self.inst_dir}/retrieve.j2",
             {"task": state.task},
+        )
+
+        self._debug(
+            "RETRIEVE / PROMPT",
+            prompt=prompt
         )
 
         # LLM selects tool and generates arguments
@@ -229,6 +337,11 @@ class Agent:
             model=self.model,
             tools=list(self.retrieve_tools.values()),  # Passes Tool metadata (name, description, schema)
             require_tool=True  # Forces tool call (no free-text responses)
+        )
+
+        self._debug(
+            "RETRIEVE / TOOL CALL",
+            tool_call=tool_call
         )
 
         # Validate LLM output format
@@ -254,7 +367,86 @@ class Agent:
         # Execute tool (e.g., TfIdfVectorDB.query())
         result = tool_impl.run(input_obj)
 
-        return {"retrieved": result}
+        self._debug(
+            "RETRIEVE / TOOL RESULT",
+            result=(
+                result.model_dump()
+                if hasattr(result, "model_dump")
+                else result
+            )
+        )
+
+        update = {"retrieved": result}
+
+        if self.verbose and "retrieved" not in update:
+            print("[WARN] RETRIEVE did not update `retrieved`")
+
+        return update
+
+    def _decide(self, state: AgentState):
+
+        self._debug(
+            "DECIDE / INPUT STATE",
+            task=state.task,
+            steps=state.steps,
+            matches=(
+                [m.model_dump() for m in state.retrieved.matches]
+                if state.retrieved is not None
+                else []
+            )
+        )
+
+        prompt = render_template(
+            f"{self.inst_dir}/decide.j2",
+            {
+                "task": state.task,
+                "matches": (
+                    [m.model_dump() for m in state.retrieved.matches]
+                    if state.retrieved is not None
+                    else []
+                )
+            }
+        )
+
+        self._debug(
+            "DECIDE / PROMPT",
+            prompt=prompt
+        )
+
+        result = query_llm(
+            system_prompt="",
+            user_inputs=[prompt],
+            model=self.model,
+            tools=[decide_tool],
+            require_tool=True
+        )
+
+        self._debug(
+            "DECIDE / OUTPUT",
+            result=result
+        )
+
+        validate(
+            instance=result["arguments"],
+            schema=decide_schema
+        )
+
+        next_steps = state.steps
+        if result["arguments"]["action"] == "retrieve":
+            next_steps += 1
+
+        update = {
+            "decision": result["arguments"],
+            "steps": next_steps
+        }
+
+        if self.verbose:
+            if "decision" not in update:
+                print("[WARN] DECIDE did not update `decision`")
+            if update["steps"] == state.steps:
+                print("[INFO] DECIDE did not increment steps")
+
+        return update
 
     def _respond(self, state: AgentState):
         """
@@ -279,6 +471,17 @@ class Agent:
             If retrieve_tools is None, the retrieved context will be None and respond
             will work without it.
         """
+
+        self._debug(
+            "RESPOND / INPUT STATE",
+            task=state.task,
+            matches=(
+                [m.model_dump() for m in state.retrieved.matches]
+                if state.retrieved is not None
+                else []
+            )
+        )
+
         # Build template context based on whether retrieval occurred
         template_context = {"task": state.task}
 
@@ -293,12 +496,22 @@ class Agent:
             template_context,
         )
 
+        self._debug(
+            "RESPOND / PROMPT",
+            prompt=prompt
+        )
+
         # LLM generates structured response using output_tool
         result = query_llm(
             system_prompt="",
             user_inputs=[prompt],
             model=self.model,
             tools=[self.output_tool] if self.output_tool else None,
+        )
+
+        self._debug(
+            "RESPOND / RAW OUTPUT",
+            result=result
         )
 
         # HARD schema validation (enforces output contract)
@@ -311,12 +524,22 @@ class Agent:
             # Validate against JSONSchema (stricter than Pydantic type hints)
             try:
                 validate(instance=result["arguments"], schema=self.output_schema)
+                self._debug(
+                    "RESPOND / VALIDATED OUTPUT",
+                    arguments=result["arguments"]
+                )
+
             except ValidationError as e:
                 return {
                     "error": f"Model output does not match output_schema: {e.message}"
                 }
 
-        return {"response": result}
+        update = {"response": result}
+
+        if self.verbose and "response" not in update:
+            print("[WARN] RESPOND did not update `response`")
+
+        return update
 
     def _eval(self, state: AgentState):
         """
@@ -338,6 +561,41 @@ class Agent:
             Empty dict (no state modifications)
         """
         return {}
+
+    def _debug(self, title: str, **payload):
+        if not self.verbose:
+            return
+
+        lines = []
+        lines.append("\n" + "=" * 80)
+        lines.append(f"[{title}]")
+        lines.append("-" * 80)
+
+        for key, value in payload.items():
+            lines.append(f"\n{key}:")
+            try:
+                lines.append(json.dumps(value, indent=2, ensure_ascii=False))
+            except Exception:
+                lines.append(str(value))
+
+        lines.append("=" * 80)
+
+        text = "\n".join(lines)
+
+        # Print to stdout
+        print(text)
+
+        # Write to log file if enabled
+        if self._log_file is not None:
+            self._log_file.write(text + "\n")
+            self._log_file.flush()
+
+    def __del__(self):
+        if getattr(self, "_log_file", None):
+            try:
+                self._log_file.close()
+            except Exception:
+                pass
 
     # =====================================================
     # Public API
@@ -375,6 +633,8 @@ class Agent:
             "retrieved": None,
             "response": None,
             "error": None,
+            "decision": None,
+            "steps": 0,
         }
 
         # Invoke graph (synchronous execution)
@@ -385,3 +645,4 @@ class Agent:
             return result["response"]
 
         raise RuntimeError(result.get("error", "Unknown failure"))
+

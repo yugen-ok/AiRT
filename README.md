@@ -1,9 +1,11 @@
-# AiRT — A Minimal, Inspectable Runtime for LLM-Driven Internal Tools
+
+
+# A minimal, inspectable runtime for building LLM-based agents with tool access
 
 ## Motivation
 
-Most “LLM agent” frameworks focus on **novelty**: autonomous agents, multi-agent orchestration, planning loops, self-reflection, etc.  
-In real projects, teams rarely need that.
+Most LLM agent frameworks focus on **novelty**: autonomous agents, multi-agent orchestration, planning loops, self-reflection, etc.  
+In real projects, however, this is rarely the main bottleneck.
 
 What they *actually* need is much simpler, and much harder to get right:
 

@@ -48,7 +48,6 @@ bodies = [email['body'] for email in emails]
 
 docs = bodies
 
-
 # ---------------------------------------------------------
 # Define retrieval tool (same idea as Tool demo)
 # ---------------------------------------------------------
@@ -64,10 +63,13 @@ vector_search_tool = TfIdfVectorSearchTool(
 # ---------------------------------------------------------
 
 agent = Agent(
-    # model="gpt-4.1",
-    model="gemini-2.5-flash",
+    model="gpt-4.1",
+    # model="gemini-2.5-flash",
     # model='claude-3-opus-20240229',
     retrieve_tools=[vector_search_tool],
+    max_decide_steps=1,
+    verbose=True,
+    log_path="agent_debug.log"
 )
 
 # ---------------------------------------------------------

@@ -1,5 +1,7 @@
 airt/scratch.py
 
+**/*.log
+
 **/recycle_bin/
 **/data/
 **/output/

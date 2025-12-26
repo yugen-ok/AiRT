@@ -1,0 +1,12 @@
+You decide whether the task can be answered with the current information.
+
+Task:
+{{ task }}
+
+Retrieved context:
+{{ matches | tojson }}
+
+If the context is sufficient to answer the task, choose action = "answer".
+If more information is needed, choose action = "retrieve".
+
+Do not explain your choice.
