@@ -53,7 +53,6 @@ class Tool(BaseModel):
         name: Function name (shown to LLM)
         description: What the tool does (helps LLM decide when to use it)
         input_schema: Pydantic model defining expected arguments
-        kind: Tool category ("local", "native", "retrieval", etc.)
         impl: Runtime implementation object with .run() method
         save_path: Optional path for persisting tool state
 
@@ -68,13 +67,11 @@ class Tool(BaseModel):
              name="my_function",
              description="Does something useful",
              input_schema=MyToolInput,
-             kind="local"
          )
     """
     name: str
     description: str
-    input_schema: Type[BaseModel]
-    kind: str = "local"  # "native" | "local" | "retrieval"
+    input_schema: Type[BaseModel] | None
 
     # Runtime implementation (not serialized, not validated by Pydantic)
     # Must have .run(input) -> output method
@@ -84,6 +81,21 @@ class Tool(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     save_path: Optional[str] = None
+
+# =========================================================
+# Native tools
+# =========================================================
+
+
+class NativeWebSearchTool(Tool):
+    def __init__(self):
+        super().__init__(
+            name="web_search",
+            description="Search the live web for up-to-date information",
+            input_schema=None,
+            impl=None,
+        )
+
 
 # =========================================================
 # Vector Search Tool Schemas
@@ -186,7 +198,6 @@ class TfIdfVectorSearchTool(Tool):
         super().__init__(
             docs=docs,
             **kwargs,
-            kind="retrieval",
             input_schema=VectorSearchInput,  # LLM outputs this format
             impl=self,  # This object handles execution
         )
@@ -337,7 +348,6 @@ class SQLDBTool(Tool):
         super().__init__(
             directory=directory,
             **kwargs,
-            kind="retrieval",
             input_schema=SQLQueryInput,  # LLM outputs this format
             impl=self,  # This object handles execution
         )

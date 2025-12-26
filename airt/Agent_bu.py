@@ -14,33 +14,23 @@ Key concepts:
 Example:
 
      from airt import Agent, TfIdfVectorSearchTool
-
-     # Example 1: Agent with retrieval
+    
+     # Create a vector search tool
      docs = ["Document 1 content", "Document 2 content"]
      tool = TfIdfVectorSearchTool(docs=docs, save_path="vdb.pkl")
-
+    
      # Initialize agent with instructions directory containing:
      #   - retrieve.j2: prompt for tool selection
      #   - respond.j2: prompt for generating response
      #   - output_schema.json: JSONSchema for structured output
      agent = Agent(
          model="gpt-4",
-         retrieve_tools=[tool],
+         tools=[tool],
          inst_dir="instructions/"
      )
-
+    
      # Run task
      result = agent.run("What is the main topic of the documents?")
-
-     # Example 2: Agent without retrieval (direct response)
-     agent_no_retrieval = Agent(
-         model="gpt-4",
-         retrieve_tools=None,  # Skip retrieve step
-         inst_dir="instructions/"
-     )
-
-     # Run task without retrieval - responds directly based on task
-     result = agent_no_retrieval.run("Explain the concept of retrieval.")
 """
 
 from typing import List, Any, Optional
@@ -85,26 +75,23 @@ class Agent:
     """
     LangGraph-based agent for task execution with retrieval and structured outputs.
 
-    The agent follows a graph that adapts based on retrieve_tools:
-        - If retrieve_tools is None: respond → eval (no retrieval step)
-        - If retrieve_tools is provided: retrieve → respond → eval
-            1. retrieve: Uses LLM to select and execute tools for information gathering
-            2. respond: Generates structured response based on retrieved context
-            3. eval: Placeholder for quality checks and validation
+    The agent follows a three-node graph:
+        1. retrieve: Uses LLM to select and execute tools for information gathering
+        2. respond: Generates structured response based on retrieved context
+        3. eval: Placeholder for quality checks and validation
 
     Attributes:
         model: LLM model identifier (e.g., "gpt-4", "gemini-2.0-flash-exp")
         inst_dir: Directory containing Jinja2 templates and output_schema.json
-        retrieve_tools: Dictionary mapping tool names to Tool objects (None if no retrieval)
-        local_tool_impls: Dictionary mapping tool names to their .run() implementations (None if no retrieval)
+        retrieve_tools: Dictionary mapping tool names to Tool objects
+        local_tool_impls: Dictionary mapping tool names to their .run() implementations
         output_schema: JSONSchema dict for response validation (if output_schema.json exists)
         output_tool: Tool wrapper for structured output (used in respond step)
         graph: Compiled LangGraph StateGraph
 
     Args:
         model: LLM model identifier
-        retrieve_tools: List of Tool objects (must have .impl attribute for local execution).
-                       If None, the retrieve step is skipped entirely.
+        retrieve_tools: List of Tool objects (must have .impl attribute for local execution)
         inst_dir: Path to directory with templates (retrieve.j2, respond.j2)
                   and optional output_schema.json
 
@@ -138,23 +125,19 @@ class Agent:
                 name="final_answer",
                 description="Produce the final structured response",
                 input_schema=OutputModel,  # This is the actual output schema
+                kind="native",
             )
         else:
             self.output_schema = self.output_tool = None
 
 
         # Tool registry for retrieval step (excludes output_tool)
-        # If retrieve_tools is None, skip the retrieve step entirely
-        if retrieve_tools is not None:
-            self.retrieve_tools = {t.name: t for t in retrieve_tools}
+        self.retrieve_tools = {t.name: t for t in retrieve_tools}
 
-            # Extract local implementations (must be set as .impl on Tool objects)
-            self.local_tool_impls = {
-                t.name: t.impl for t in retrieve_tools if hasattr(t, "impl")
-            }
-        else:
-            self.retrieve_tools = None
-            self.local_tool_impls = None
+        # Extract local implementations (must be set as .impl on Tool objects)
+        self.local_tool_impls = {
+            t.name: t.impl for t in retrieve_tools if hasattr(t, "impl")
+        }
 
         self.graph = self._build_graph()
 
@@ -166,25 +149,21 @@ class Agent:
         """
         Constructs the LangGraph execution graph.
 
-        Creates a pipeline that adapts based on retrieve_tools:
-            - If retrieve_tools is None: respond → eval → END
-            - If retrieve_tools is provided: retrieve → respond → eval → END
+        Creates a linear three-node pipeline:
+            retrieve → respond → eval → END
 
         Returns:
             Compiled StateGraph ready for invocation
         """
         g = StateGraph(AgentState)
 
+
+        g.add_node("retrieve", self._retrieve)
         g.add_node("respond", self._respond)
         g.add_node("eval", self._eval)
 
-        if self.retrieve_tools is not None:
-            g.add_node("retrieve", self._retrieve)
-            g.set_entry_point("retrieve")
-            g.add_edge("retrieve", "respond")
-        else:
-            g.set_entry_point("respond")
-
+        g.set_entry_point("retrieve")
+        g.add_edge("retrieve", "respond")
         g.add_edge("respond", "eval")
         g.add_edge("eval", END)
 
@@ -258,16 +237,16 @@ class Agent:
 
     def _respond(self, state: AgentState):
         """
-        Respond node: Generates structured response based on retrieved context (if available).
+        Respond node: Generates structured response based on retrieved context.
 
         Flow:
-            1. Renders respond.j2 template with task and retrieved matches (if retrieval occurred)
+            1. Renders respond.j2 template with task and retrieved matches
             2. Calls LLM with output_tool (wraps output schema as tool)
             3. Validates response against JSONSchema (if output_schema.json exists)
             4. Returns validated response
 
         Args:
-            state: Current AgentState with task and optionally retrieved context
+            state: Current AgentState with task and retrieved context
 
         Returns:
             Dict with "response" key containing structured output conforming to schema
@@ -276,21 +255,17 @@ class Agent:
         Note:
             Uses JSONSchema validation (not just Pydantic) to ensure strict contract
             compliance across model versions. This prevents silent schema drift.
-            If retrieve_tools is None, the retrieved context will be None and respond
-            will work without it.
         """
-        # Build template context based on whether retrieval occurred
-        template_context = {"task": state.task}
+        if state.retrieved is None:
+            return {"error": "Respond called without retrieved context."}
 
-        if state.retrieved is not None:
-            template_context["matches"] = [m.model_dump() for m in state.retrieved.matches]
-        else:
-            template_context["matches"] = []
-
-        # Render prompt with task and retrieved context (if any)
+        # Render prompt with task and retrieved context
         prompt = render_template(
             f"{self.inst_dir}/respond.j2",
-            template_context,
+            {
+                "task": state.task,
+                "matches": [m.model_dump() for m in state.retrieved.matches],
+            },
         )
 
         # LLM generates structured response using output_tool

@@ -98,27 +98,6 @@ def _hash_request(obj: dict) -> str:
     ).hexdigest()
 
 
-def _convert_tools_for_gemini(tools: list) -> list:
-    """
-    Convert Tool objects to Gemini's FunctionDeclaration format.
-
-    Args:
-        tools: List of airt.Tool objects
-
-    Returns:
-        List containing single types.Tool with all function declarations
-    """
-    fn_decls = []
-    for tool in tools:
-        fn_decls.append(
-            types.FunctionDeclaration(
-                name=tool.name,
-                description=tool.description,
-                parameters=tool.input_schema.model_json_schema(),
-            )
-        )
-    return [types.Tool(function_declarations=fn_decls)]
-
 
 def _convert_tools_for_openai(tools: list) -> list:
     """
@@ -132,15 +111,56 @@ def _convert_tools_for_openai(tools: list) -> list:
     """
     payload = []
     for tool in tools:
-        payload.append({
-            "type": "function",
-            "function": {
+
+        if tool.input_schema is not None:
+            payload.append({
+                "type": "function",
                 "name": tool.name,
                 "description": tool.description,
                 "parameters": tool.input_schema.model_json_schema(),
-            }
-        })
+            })
+
+        else:
+            # When there is no implementation, there is no function to call,
+            # and instead we just use the tool's name to trigger the native capability
+            payload.append({"type": tool.name})
+
     return payload
+
+
+def _convert_tools_for_gemini(tools: list) -> list:
+    """
+    Convert Tool objects to Gemini's FunctionDeclaration format.
+
+    Args:
+        tools: List of airt.Tool objects
+
+    Returns:
+        List containing single types.Tool with all function declarations
+    """
+    fn_decls = []
+    payload = []
+    for tool in tools:
+
+        if tool.input_schema is not None:
+
+            fn_decls.append(
+                types.FunctionDeclaration(
+                    name=tool.name,
+                    description=tool.description,
+                    parameters=tool.input_schema.model_json_schema(),
+                )
+            )
+
+        elif tool.name == 'web_search':
+            payload.append(types.Tool(google_search=types.GoogleSearch()))
+        else:
+            raise ValueError(f"Tool '{tool.name}' does not have an implementation, a schema, or is not supported.")
+
+    if fn_decls:
+        payload.extend([types.Tool(function_declarations=fn_decls)])
+    return payload
+
 
 def _convert_tools_for_claude(tools: list) -> list:
     """
@@ -153,9 +173,12 @@ def _convert_tools_for_claude(tools: list) -> list:
         List of dicts with name, description, and input_schema keys
     """
 
-def _convert_tools_for_claude(tools: list) -> list:
     payload = []
     for tool in tools:
+
+        if tool.name == 'web_search':
+            raise NotImplementedError("web_search is not supported for Claude yet.")
+
         payload.append(
             {
                 "name": tool.name,
@@ -323,13 +346,12 @@ def _query_openai(
     for user_text in user_inputs:
         req = {
             "model": model,
-            "messages": build_messages(user_text),
+            "input": build_messages(user_text),
             "temperature": temperature,
-            "max_tokens": max_tokens,
+            "max_output_tokens": max_tokens,
         }
         if tools:
             req["tools"] = _convert_tools_for_openai(tools)
-
         requests.append(req)
 
     # Semaphore limits concurrent requests
@@ -342,24 +364,40 @@ def _query_openai(
         # Check cache first
         if cache_obj is not None and key in cache_obj:
             return cache_obj[key]
-
         async with semaphore:
-            resp = await client.chat.completions.create(**req)
-            msg = resp.choices[0].message
 
-            # Parse text or tool call response
-            if not tools:
-                result = msg.content
-            else:
-                if not msg.tool_calls:
-                    raise RuntimeError("Model did not return a tool call")
+            resp = await client.responses.create(**req)
+            text_parts = []
+            tool_call = None
 
-                tool_call = msg.tool_calls[0]
+            for item in resp.output:
+
+                # Case 1: native web search call (you can ignore or log it)
+                if item.type == "web_search_call":
+                    continue
+
+                # Case 2: assistant message
+                if item.type == "message":
+                    for part in item.content:
+                        if part.type == "output_text":
+                            text_parts.append(part.text)
+
+                # Case 3: function tool call
+                if item.type == "function_call":
+                    tool_call = item
+
+            if tools and tool_call:
+
+                args = tool_call.arguments
+                if isinstance(args, str):
+                    args = json.loads(args)
 
                 result = {
-                    "tool_name": tool_call.function.name,
-                    "arguments": json.loads(tool_call.function.arguments),
+                    "tool_name": tool_call.name,
+                    "arguments": args or {},
                 }
+            else:
+                result = "".join(text_parts)
 
             # Cache result
             if cache_obj is not None:
@@ -425,19 +463,35 @@ def _query_gemini(
     if not user_inputs:
         user_inputs = [None]
 
+
+    # This part is extremely ugly. I don't know yet whats a better way to solve this.
+    # Gemini distinguishes between native tools like GoogleSearch, which don't have function declarations,
+    # and external tools, which do. I found no way to unify them yet. And config is meant to
+    # enable function calls. So we have to make sure we create a config iff there are external
+    # tools.
     gemini_tools = _convert_tools_for_gemini(tools) if tools else None
 
-    # Configure tool calling mode
-    config = types.GenerateContentConfig(
-        temperature=temperature,
-        max_output_tokens=max_tokens,
-        tools=gemini_tools,
-        tool_config=types.ToolConfig(
-            function_calling_config=types.FunctionCallingConfig(
-                mode="ANY" if require_tool else "AUTO"  # ANY = force tool call
-            )
-        ),
+    has_function_decls = any(
+        getattr(t, "function_declarations", None)
+        for t in gemini_tools
     )
+
+    # Configure tool calling mode
+    if has_function_decls:
+
+        config = types.GenerateContentConfig(
+            temperature=temperature,
+            max_output_tokens=max_tokens,
+            tools=gemini_tools,
+            tool_config=types.ToolConfig(
+                function_calling_config=types.FunctionCallingConfig(
+                    mode="ANY" if require_tool else "AUTO"  # ANY = force tool call
+                )
+            ),
+        )
+
+    else:
+        config = None
 
     def extract_tool_call(resp):
         """
@@ -493,7 +547,7 @@ def _query_gemini(
             "tools": bool(tools),
             "require_tool": bool(require_tool),
             "tool_names": [t.name for t in (tools or [])],
-            "tool_schemas": [t.input_schema.model_json_schema() for t in (tools or [])],
+            "tool_schemas": [t.input_schema.model_json_schema() if t.input_schema is not None else '' for t in (tools or [])],
         }
 
         key = _hash_request(payload)
