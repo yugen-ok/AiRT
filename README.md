@@ -197,7 +197,7 @@ export OPENAI_API_KEY=<your-key>
 
 ### 2. Prepare Instructions Directory
 
-By default, the agent will look for a directory called `inst` in the current working directory. See `example_usage/enron/inst` for a template.
+By default, the agent will look for a directory called `inst` in the current working directory. In the absence of any of those instructions, it will default to the ones in `airt/default_inst/` (you can use them as examples of how to create custom ones).
 
 ---
 
