@@ -15,5 +15,4 @@ Requires-Dist: pandas>=2.3.3
 Requires-Dist: protobuf>=6.33.2
 Requires-Dist: pydantic>=2.12.5
 Requires-Dist: scikit-learn>=1.8.0
-Requires-Dist: sentence-transformers>=5.2.0
 Dynamic: license-file

@@ -34,9 +34,6 @@ import shutil
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-from .utils.doc_utils import chunk_text_sliding
-
-
 class DB:
     """
     Abstract base class for persistent, queryable databases.
@@ -122,7 +119,7 @@ class DB:
         Base implementation creates parent directories. Subclasses should
         call super().save() then add their serialization logic.
         """
-        print("Saving DB to: ", self.save_path)
+        print("Saving DB to:", self.save_path)
         os.makedirs(os.path.dirname(self.save_path), exist_ok=True)
 
     def load(self):
@@ -132,15 +129,17 @@ class DB:
         Base implementation logs the load. Subclasses should call super().load()
         then add their deserialization logic.
         """
-        print("Loading DB from: ", self.save_path)
+        print("Loading DB from:", self.save_path)
 
 
 class TfIdfVectorDB(DB):
     """
     Sparse vector database using TF-IDF for text retrieval.
 
-    Uses sklearn's TfidfVectorizer with n-grams and cosine similarity for
-    ranking. Suitable for keyword-based retrieval where exact term matches matter.
+    Uses sklearn's TfidfVectorizer with all configuration supplied externally.
+    This class applies TF-IDF exactly as configured by the calling Tool and
+    does not define policy-level defaults.
+    Suitable for keyword-based retrieval where exact term matches matter.
 
     Advantages:
         - Fast (no GPU required)
@@ -155,8 +154,6 @@ class TfIdfVectorDB(DB):
         docs: List of text strings to index
         vectorizer: TfidfVectorizer instance
         matrix: Sparse TF-IDF matrix (docs × vocab)
-        chunk_size: Characters per chunk (unused in current implementation)
-        overlap: Overlap between chunks (unused in current implementation)
 
     Example:
          docs = ["Machine learning is a subset of AI",
@@ -167,8 +164,22 @@ class TfIdfVectorDB(DB):
         'Deep learning uses neural networks'
     """
 
-    def __init__(self, docs, ngram_min=1, ngram_max=3, min_df=2, chunk_size=1000, overlap=200,
-                 save_path = None, rebuild = False):
+    def __init__(
+            self,
+            docs,
+            *,
+            stop_words,
+            ngram_min,
+            ngram_max,
+            min_df,
+            max_df,
+            sublinear_tf,
+            norm,
+            token_pattern,
+            save_path=None,
+            rebuild=False,
+    ):
+
         """
         Initialize TF-IDF vector database.
 
@@ -177,21 +188,22 @@ class TfIdfVectorDB(DB):
             ngram_min: Minimum n-gram size (1 = unigrams)
             ngram_max: Maximum n-gram size (2 = bigrams, 3 = trigrams, etc.)
             min_df: Minimum document frequency (filters rare terms)
-            chunk_size: Reserved for future chunking implementation
-            overlap: Reserved for future chunking implementation
             save_path: Path for caching fitted vectorizer and matrix
             rebuild: Force rebuild even if cache exists
         """
-        self.chunk_size = chunk_size
-        self.overlap = overlap
 
         # Configure TF-IDF with n-grams for better phrase matching
         self.vectorizer = TfidfVectorizer(
             analyzer="word",
-            stop_words='english',  # Remove common words
-            ngram_range=(ngram_min, ngram_max),  # Capture multi-word phrases
-            min_df=min_df  # Filter terms appearing in < min_df documents
+            stop_words=stop_words,
+            ngram_range=(ngram_min, ngram_max),
+            min_df=min_df,
+            max_df=max_df,
+            sublinear_tf=sublinear_tf,
+            norm=norm,
+            token_pattern=token_pattern,
         )
+
         self.docs = docs
         self.matrix = None  # Populated in _build_from_scratch()
 
@@ -204,7 +216,7 @@ class TfIdfVectorDB(DB):
         Creates sparse matrix where rows = documents, columns = vocabulary.
         Each cell contains TF-IDF weight for that term in that document.
         """
-        print("Loading text")
+        print("Building TF-IDF matrix...")
         self.matrix = self.vectorizer.fit_transform(self.docs)
         print("Complete.")
 
@@ -478,7 +490,7 @@ class SQLDB(DB):
         import pandas as pd
 
         table = self._sanitize_name(path.stem)
-        df = pd.read_csv(path)
+        df = pd.read_csv(path, dtype=str, low_memory=False).fillna("")
         df.to_sql(table, self.conn, if_exists="replace", index=False)
 
     def _load_xlsx(self, path):
@@ -549,10 +561,8 @@ class BertFaissVectorDB(DB):
     Attributes:
         data_directory_path: Directory containing text files to index
         model_name: HuggingFace model ID for embeddings
-        chunk_size: Characters per text chunk
-        overlap: Overlap between consecutive chunks
         normalize: Normalize embeddings for cosine similarity
-        texts: List of chunked text strings
+        docs: List of strings
         embeddings: NumPy array of dense vectors
         index: FAISS index for similarity search
 
@@ -569,8 +579,6 @@ class BertFaissVectorDB(DB):
         self,
         data_directory_path,
         model_name="sentence-transformers/all-MiniLM-L6-v2",
-        chunk_size=1000,
-        overlap=200,
         normalize=True,
         save_path=None,
         rebuild=False
@@ -581,16 +589,12 @@ class BertFaissVectorDB(DB):
         Args:
             data_directory_path: Directory with text files to encode
             model_name: HuggingFace sentence-transformer model
-            chunk_size: Characters per chunk (controls granularity)
-            overlap: Overlap between chunks (maintains context across splits)
             normalize: L2-normalize embeddings for cosine similarity
             save_path: Path for caching embeddings and index
             rebuild: Force rebuild even if cache exists
         """
         self.data_directory_path = data_directory_path
         self.model_name = model_name
-        self.chunk_size = chunk_size
-        self.overlap = overlap
         self.normalize = normalize
 
         # Lazy-loaded to avoid importing heavy dependencies unless needed
@@ -598,7 +602,7 @@ class BertFaissVectorDB(DB):
         self.faiss = None
         self.index = None
 
-        self.texts = []
+        self.docs = []
         self.embeddings = None
         self.dim = None
         super().__init__(save_path, rebuild)
@@ -627,26 +631,15 @@ class BertFaissVectorDB(DB):
             self.model = SentenceTransformer(self.model_name)
             self.faiss = faiss
 
-    def _load_and_chunk(self):
+    def _load(self):
         """
-        Read all text files from directory and chunk them.
-
-        Merges all files, then splits into overlapping chunks to maintain
-        context across chunk boundaries.
+        Read all text files from directory into self.docs.
         """
-        merged = ""
         for filename in os.listdir(self.data_directory_path):
             filepath = os.path.join(self.data_directory_path, filename)
             if os.path.isfile(filepath):
                 with open(filepath, "r", encoding="utf8") as f:
-                    merged += f.read() + "\n"
-
-        # Sliding window chunking preserves context at boundaries
-        self.texts = chunk_text_sliding(
-            merged,
-            chunk_size=self.chunk_size,
-            overlap=self.overlap
-        )
+                    self.docs.append(f.read())
 
     def _build_from_scratch(self):
         """
@@ -660,11 +653,11 @@ class BertFaissVectorDB(DB):
             5. Build FAISS index for fast search
         """
         self._lazy_imports()
-        self._load_and_chunk()
+        self._load()
 
-        # Encode all chunks using transformer model
+        # Encode all docs using transformer model
         embeddings = self.model.encode(
-            self.texts,
+            self.docs,
             convert_to_numpy=True,
             show_progress_bar=True
         )
@@ -687,19 +680,19 @@ class BertFaissVectorDB(DB):
 
     def query(self, prompt, top_k=5, window=5):
         """
-        Semantic search for relevant text chunks.
+        Semantic search for relevant docs.
 
         Args:
             prompt: Query string
-            top_k: Number of most similar chunks to retrieve
-            window: Include ±window neighboring chunks for context
+            top_k: Number of most similar docs to retrieve
+            window: Include ±window neighboring docs for context
 
         Returns:
-            Single merged string of all retrieved chunks (sorted by position)
+            Single merged string of all retrieved docs (sorted by position)
 
         Example:
              result = db.query("authentication workflow", top_k=3, window=1)
-            # Returns text from 3 matched chunks plus their neighbors
+            # Returns text from 3 matched docs plus their neighbors
         """
         self._lazy_imports()
 
@@ -719,16 +712,16 @@ class BertFaissVectorDB(DB):
         scores, inds = self.index.search(q, top_k)
         inds = inds[0]
 
-        # Expand to include neighboring chunks for context
+        # Expand to include neighboring docs for context
         all_inds = set()
         for i in inds:
             start = max(0, i - window)
-            end = min(len(self.texts), i + window + 1)
+            end = min(len(self.docs), i + window + 1)
             for j in range(start, end):
                 all_inds.add(j)
 
-        # Merge chunks in sequential order (preserves narrative flow)
-        merged_text = " ".join(self.texts[i] for i in sorted(all_inds))
+        # Merge docs in sequential order (preserves narrative flow)
+        merged_text = " ".join(self.docs[i] for i in sorted(all_inds))
         return merged_text
 
     def save(self):
@@ -746,12 +739,10 @@ class BertFaissVectorDB(DB):
         with open(self.save_path, "wb") as f:
             pickle.dump(
                 {
-                    "texts": self.texts,
+                    "texts": self.docs,
                     "embeddings": self.embeddings,
                     "dim": self.dim,
                     "model_name": self.model_name,
-                    "chunk_size": self.chunk_size,
-                    "overlap": self.overlap,
                     "normalize": self.normalize,
                 },
                 f
@@ -773,12 +764,10 @@ class BertFaissVectorDB(DB):
         with open(self.save_path, "rb") as f:
             data = pickle.load(f)
 
-        self.texts = data["texts"]
+        self.docs = data["texts"]
         self.embeddings = data["embeddings"]
         self.dim = data["dim"]
         self.model_name = data["model_name"]
-        self.chunk_size = data["chunk_size"]
-        self.overlap = data["overlap"]
         self.normalize = data["normalize"]
 
         # Load FAISS index

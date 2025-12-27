@@ -121,7 +121,7 @@ class VectorMatch(BaseModel):
 
     Attributes:
         id: Unique identifier for the match
-        content: Text content of the matched document/chunk
+        content: Text content of the matched document
     """
     id: str
     content: str
@@ -148,22 +148,40 @@ class TfIdfVectorSearchTool(Tool):
     Wraps TfIdfVectorDB as a Tool for LLM function calling. The LLM can
     invoke this tool by generating VectorSearchInput arguments.
 
+    Design note:
+    TF-IDF configuration is owned by the Tool, not the DB.
+    All parameters in tfidf_params are forwarded verbatim to TfIdfVectorDB,
+    making retrieval behavior fully explicit, reproducible, and inspectable.
+
+
     Attributes:
         name: Tool identifier (default: "vector_search")
         description: Tool description shown to LLM
         docs: List of documents to index
         save_path: Path for caching TF-IDF index
-        ngram_min: Minimum n-gram size for TF-IDF
-        ngram_max: Maximum n-gram size for TF-IDF
-        min_df: Minimum document frequency for terms
-        chunk_size: Reserved for future chunking
-        overlap: Reserved for future chunking
+        Attributes:
+        tfidf_params: Dict of parameters forwarded directly to TfidfVectorizer
+                      (stop_words, ngram_min/max, min_df, max_df, norm, sublinear_tf, token_pattern)
+
         _vdb: Private TfIdfVectorDB instance
 
     Example:
          docs = ["Python is a programming language", "Java is also a language"]
-         tool = TfIdfVectorSearchTool(docs=docs, ngram_max=2, save_path="index.pkl")
-        
+         tool = TfIdfVectorSearchTool(
+                docs=docs,
+                tfidf_params={
+                    "stop_words": "english",
+                    "ngram_min": 1,
+                    "ngram_max": 2,
+                    "min_df": 2,
+                    "max_df": 0.90,
+                    "sublinear_tf": True,
+                    "norm": "l2",
+                    "token_pattern": r"(?u)\b[a-zA-Z][a-zA-Z-]+\b",
+                },
+                save_path="index.pkl",
+            )
+
          # LLM generates this input:
          search_input = VectorSearchInput(query="programming", top_k=1)
          output = tool.run(search_input)
@@ -177,11 +195,22 @@ class TfIdfVectorSearchTool(Tool):
     # Tool-specific parameters (excluded from serialization)
     docs: list[str] = Field(exclude=True)
     save_path: str | None = Field(default=None, exclude=True)
-    ngram_min: int = Field(default=1, exclude=True)
-    ngram_max: int = Field(default=3, exclude=True)
-    min_df: int = Field(default=1, exclude=True)
-    chunk_size: int = Field(default=1000, exclude=True)
-    overlap: int = Field(default=200, exclude=True)
+
+    tfidf_params: dict = Field(
+        default_factory=lambda: {
+            "stop_words": "english",
+            "ngram_min": 1,
+            "ngram_max": 3, # Capture multi-word phrases
+            "min_df": 2, # Filter terms appearing in < min_df documents
+            "max_df": 0.90, # Remove extremely common terms
+            "sublinear_tf": True, # Dampens raw word counts so repeated words add diminishing extra weight
+            "norm": "l2", # Rescale vectors to avoid long documents automatically looking more important than short ones
+            "token_pattern": r"(?u)\b[a-zA-Z][a-zA-Z-]+\b" # Remove numbers, punctuation, etc.
+        },
+        exclude=True,
+        description="Passed verbatim to TfIdfVectorDB / TfidfVectorizer",
+    )
+
 
     # Private vector database instance
     _vdb: TfIdfVectorDB | None = PrivateAttr(default=None)
@@ -210,14 +239,11 @@ class TfIdfVectorSearchTool(Tool):
         the TF-IDF index.
         """
         self._vdb = TfIdfVectorDB(
-            self.docs,
+            docs=self.docs,
             save_path=self.save_path,
-            ngram_min=self.ngram_min,
-            ngram_max=self.ngram_max,
-            min_df=self.min_df,
-            chunk_size=self.chunk_size,
-            overlap=self.overlap,
+            **self.tfidf_params,
         )
+
 
     def run(self, input: VectorSearchInput) -> VectorSearchOutput:
         """
@@ -363,7 +389,27 @@ class SQLDBTool(Tool):
         self._db = SQLDB(self.directory, db_path=self.db_path, save_path=self.save_path)
 
         # Augment description with schema for LLM context
-        self.description += json.dumps(self._db.schema())
+        schema_data = self._db.schema()
+        self.description += json.dumps(schema_data)
+
+        # Add example first row for each table
+        cursor = self._db.conn.cursor()
+        examples = {}
+        for table_name in schema_data.get("tables", {}):
+            for table_name in schema_data.get("tables", {}):
+                cursor.execute(f"SELECT * FROM {table_name} LIMIT 1")
+                row = cursor.fetchone()
+                if row:
+                    # Cap each value at 100 chars
+                    examples[table_name] = [
+                        (str(val)[:100] + '...' if len(str(val)) > 100 else str(val))
+                        for val in row
+                    ]
+
+        if examples:
+            self.description += "\n\nExample rows:\n" + json.dumps(examples)
+
+
 
     def run(self, input: SQLQueryInput) -> SQLQueryOutput:
         """

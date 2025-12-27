@@ -5,6 +5,7 @@ airt/Agent.py
 airt/DB.py
 airt/Tool.py
 airt/__init__.py
+airt/query_llm.py
 airt/scratch.py
 airt.egg-info/PKG-INFO
 airt.egg-info/SOURCES.txt
