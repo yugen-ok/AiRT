@@ -107,7 +107,7 @@ Task (string)
 → LLM selects a tool
 → Tool executes locally
 → Structured retrieval result
-↓ (loop back to Decide or continue to Respond)
+↓ (Decide determines if to loop back to Retrieve or continue to Respond)
 [ Respond Node ]
 → LLM synthesizes an answer
 → Output is schema-validated
@@ -186,15 +186,31 @@ This is the layer teams usually realize they need *after* shipping a prototype.
 
 ## Basic Usage
 
-### 1. Prepare Documents (Example: Emails)
+### 1. Expose API Keys
 
-```python
-docs = ["doc1", "doc2", ...]
+```bash
+export OPENAI_API_KEY=<your-key>
 ````
 
 ---
 
-### 2. Create a Retrieval Tool
+
+### 2. Prepare Instructions Directory
+
+See `example_usage/enron/inst` for a template.
+
+---
+
+
+### 3. Prepare Documents
+
+```python
+docs = ["doc1", "doc2", ...]
+```
+
+---
+
+### 4. Create a Retrieval Tool
 
 ```python
 
@@ -208,7 +224,7 @@ vector_search_tool = TfIdfVectorSearchTool(
 
 ---
 
-### 3. Create an Agent
+### 5. Create an Agent
 
 ```python
 
@@ -222,7 +238,7 @@ agent = Agent(
 
 ---
 
-### 4. Run a Task
+### 6. Run a Task
 
 ```python
 result = agent.run(
@@ -232,10 +248,9 @@ result = agent.run(
 print(result)
 ```
 
-The result will either:
+The agent will then iteratively retrieve documents from your dataset until it decides it has enough context, and then will respond with a structured answer.
 
-* Match the declared output schema
-* Or raise a clear error
+See `usage_examples/enron/run.py` and `usage_examples/instacart/run.py` for complete exmamples.
 
 ## Output Schemas (Optional but Recommended)
 

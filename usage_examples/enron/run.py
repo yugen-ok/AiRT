@@ -58,8 +58,6 @@ def chunk_emails(emails, chunk_size=2000):
 
     return documents
 
-
-
 # ---------------------------------------------------------
 # Load and chunk data
 # ---------------------------------------------------------
@@ -97,6 +95,7 @@ print(f"Created {len(email_chunks)} document chunks from {len(emails)} emails")
 
 # Create searchable text from each document (for TF-IDF indexing)
 docs = [
+    f"Email Chunk #{doc['chunk_index']}\n"
     f"From: {doc['from_name'] or doc['from']}\n"
     f"To: {', '.join(doc['to_names']) if doc['to_names'] else ', '.join(doc['to'] or [])}\n"
     f"Date: {doc['date']}\n"
