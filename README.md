@@ -197,7 +197,7 @@ export OPENAI_API_KEY=<your-key>
 
 ### 2. Prepare Instructions Directory
 
-See `example_usage/enron/inst` for a template.
+By default, the agent will look for a directory called `inst` in the current working directory. See `example_usage/enron/inst` for a template.
 
 ---
 
