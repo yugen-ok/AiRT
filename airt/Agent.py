@@ -178,12 +178,17 @@ class Agent:
         if self.verbose and self.log_path is not None:
             self._log_file = open(self.log_path, "a", encoding="utf8")
 
-        # Load output schema if present for hard validation
+        # Determine default instruction directory (relative to this file)
+        self.default_inst_dir = Path(__file__).parent / "default_inst"
+
+        # Load output schema with fallback to default
+        output_schema = None
         schema_path = Path(inst_dir) / "output_schema.json"
         if schema_path.exists():
             with open(schema_path, encoding="utf8") as f:
                 output_schema = json.load(f)
 
+        if output_schema is not None:
             self.output_schema = output_schema
 
             # Convert JSONSchema to Pydantic for LLM tool calling
@@ -215,6 +220,29 @@ class Agent:
             self.local_tool_impls = None
 
         self.graph = self._build_graph()
+
+    # =====================================================
+    # Helper Methods
+    # =====================================================
+
+    def _get_template_path(self, template_name: str) -> str:
+        """
+        Get the path to a template file, falling back to default if not found in inst_dir.
+
+        Args:
+            template_name: Name of the template file (e.g., "retrieve.j2", "respond.j2")
+
+        Returns:
+            Path to the template file (either from inst_dir or default_inst_dir)
+        """
+        custom_path = Path(self.inst_dir) / template_name
+        if custom_path.exists():
+            return str(custom_path)
+
+        print(f"[INFO] Template {template_name} not found in {self.inst_dir}. Using default.")
+
+        default_path = self.default_inst_dir / template_name
+        return str(default_path)
 
     # =====================================================
     # Graph Construction
@@ -308,7 +336,7 @@ class Agent:
         }
 
         prompt = render_template(
-            f"{self.inst_dir}/retrieve.j2",
+            self._get_template_path("retrieve.j2"),
             template_context,
         )
 
@@ -465,7 +493,7 @@ class Agent:
         )
 
         prompt = render_template(
-            f"{self.inst_dir}/decide.j2",
+            self._get_template_path("decide.j2"),
             {
                 "task": state.task,
                 "matches": (
@@ -551,7 +579,7 @@ class Agent:
 
         # Render prompt with task and retrieved context (if any)
         prompt = render_template(
-            f"{self.inst_dir}/respond.j2",
+            self._get_template_path("respond.j2"),
             template_context,
         )
 

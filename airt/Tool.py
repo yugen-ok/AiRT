@@ -15,6 +15,7 @@ Provided tools:
     - SQLDBTool: SQL querying over CSV/Excel data
 
 Example:
+
      # Define a vector search tool
      docs = ["Document 1", "Document 2"]
      tool = TfIdfVectorSearchTool(docs=docs, save_path="vdb.pkl")
@@ -59,6 +60,10 @@ class Tool(BaseModel):
     The Tool class is serializable (for passing to LLM APIs) but the impl
     is excluded from serialization since it's only needed at runtime.
 
+    To subclass Tool, the main requirement is having a .run() method
+    that returns a list of BaseModel subclasses that have a .matches field,
+    which represents the tool's output.
+
     Example:
          class MyToolInput(BaseModel):
              query: str
@@ -71,10 +76,11 @@ class Tool(BaseModel):
     """
     name: str
     description: str
-    input_schema: Type[BaseModel] | None
+    input_schema: Type[BaseModel] | None # None schema is for LLM-native tools that have no local implementation
 
     # Runtime implementation (not serialized, not validated by Pydantic)
-    # Must have .run(input) -> output method
+    # In the absence of impl, the tool is only a schema requirement and doesn't
+    # represent an actual funciotn call.
     impl: Optional[Any] = None
 
     # Allow arbitrary types for input_schema (Pydantic class type)

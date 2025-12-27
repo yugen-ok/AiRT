@@ -9,7 +9,7 @@ import quopri
 # Configuration
 # =========================
 
-INPUT_CSV = "data/emails_10k.csv"
+INPUT_CSV = "data/emails.csv"
 OUTPUT_CSV = "output/email_chunks.csv"
 DOCS_PATH = "output/email_docs.txt"
 
@@ -274,7 +274,7 @@ def build_chunks(load_existing=True):
     """
 
     if os.path.exists(OUTPUT_CSV) and load_existing:
-        print(f"[LOAD] Loading existing chunks from {OUTPUT_CSV}")
+        print(f"[LOAD] Existing chunks detected at {OUTPUT_CSV}")
         return
     # -------------------------
     # Build from scratch
@@ -360,7 +360,6 @@ def build_chunks(load_existing=True):
 def build_docs(load_existing=True):
 
     if os.path.exists(DOCS_PATH) and load_existing:
-        print(f"[LOAD] Loading existing chunks from {OUTPUT_CSV}")
         print(f"[LOAD] Loading existing docs from {DOCS_PATH}")
 
         with open(DOCS_PATH, encoding="utf8") as f:

@@ -5,9 +5,6 @@ Download data from: https://www.kaggle.com/datasets/wcukierski/enron-email-datas
 """
 
 
-import json
-import random
-import pandas as pd
 from pprint import pprint
 
 from preprocess import build_chunks, build_docs
@@ -15,15 +12,16 @@ from preprocess import build_chunks, build_docs
 from airt.Tool import TfIdfVectorSearchTool, SQLDBTool
 from airt.Agent import Agent
 
-SQL_DB_PATH = "output/emails.sql"
-VECTOR_DB_PATH = "output/emails_vdb.pkl"
+OUTPUT_DIR = "output/"
 
+SQL_DB_PATH = f"{OUTPUT_DIR}/emails.sql"
+VECTOR_DB_PATH = f"{OUTPUT_DIR}/emails_vdb.pkl"
 
 build_chunks()
 docs = build_docs()
 
 sql_tool = SQLDBTool(
-    directory="output/",
+    directory=OUTPUT_DIR,
     save_path=SQL_DB_PATH,
 )
 
@@ -45,23 +43,24 @@ agent = Agent(
     max_retrieve_steps=10,
     max_retrieved_chars = 10000,
     verbose=True,
-    log_path="agent_debug.log"
+    # log_path="agent_debug.log",
 )
 
 # ---------------------------------------------------------
 # Run Agent
 # ---------------------------------------------------------
 query = """
-Find some examples of decisions that happen “offline”
-Phrases like:
+Find at least 10 examples of someone asking for a disucssion to move offline. Consider multiple phrases for coverage.
 
-“Let’s discuss verbally”
+Query for phrases like:
 
-“Better not put this in email”
+call me
+let’s discuss offline
+not in email
+verbal discussion
+pick up the phone
 
-“Call me”
-
-Limit tok_k to a small number.
+Limit tok_k to a small number to avoid explosion. 
 
 Cite the source as [<email_idx>.<chunk_idx>], using the corresponding email_idx and chunk_idx from the header fields.
 
