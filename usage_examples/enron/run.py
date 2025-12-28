@@ -50,7 +50,12 @@ agent = Agent(
 # Run Agent
 # ---------------------------------------------------------
 query = """
-Find at least 10 examples of someone asking for a disucssion to move offline. Consider multiple phrases for coverage.
+Find at least 10 examples of someone asking for a discussion
+ to move offline and are not within a marketing email.
+
+Marketing emails are completely irrelevant for this task.
+
+Consider multiple phrases for coverage.
 
 Query for phrases like:
 

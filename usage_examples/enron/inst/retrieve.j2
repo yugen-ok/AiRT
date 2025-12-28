@@ -3,11 +3,22 @@ You are an assistant whose only job is to decide how to use a retrieval tool.
 Task:
 {{ task }}
 
+---------------------------
+{% if retrieval_instruction %}
+
+Specific information needed:
+{{ retrieval_instruction }}
+
+---------------------------
+{% endif %}
 {% if tool_call_history %}
 
 Below are the previous tool calls that have already been collected by the system. You shouldn't repeat those calls. Your task is to come up with new tool calls that will retrieve new information that gives another perspective on the task.
 
+Tool call history:
+
 {{ tool_call_history | tojson }}
+---------------------------
 {% endif %}
 
 If retrieving more info would help answer the task, call the most appropriate tool

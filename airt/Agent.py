@@ -69,6 +69,17 @@ decide_schema = {
         "action": {
             "type": "string",
             "enum": ["retrieve", "answer"]
+        },
+        "relevant_match_indices": {
+            "type": "array",
+            "items": {
+                "type": "integer"
+            },
+            "description": "Indices of matches that are directly relevant to the task"
+        },
+        "retrieval_instruction": {
+            "type": "string",
+            "description": "Brief explanation of what specific information is still missing and needs to be retrieved"
         }
     },
     "required": ["action"]
@@ -137,7 +148,7 @@ class Agent:
         output_tool: Tool wrapper for structured output (used in respond step)
         graph: Compiled LangGraph StateGraph
         max_retrieve_steps: Maximum number of retrieval iterations allowed
-        max_retrieved_chars: Maximum total characters allowed in retrieved context
+        max_retrieved_chars: Maximum total characters allowed in retrieved context; Important: this does not set a limit for the actual final prompt, only fo the retrieved information.
         verbose: Whether to print debug information
         log_path: Optional path to log file for debug output
 
@@ -332,7 +343,8 @@ class Agent:
         # Render prompt from template
         template_context = {
             "task": state.task,
-            "tool_call_history": state.tool_call_history
+            "tool_call_history": state.tool_call_history,
+            "retrieval_instruction": state.decision.get("retrieval_instruction", "") if state.decision else ""
         }
 
         prompt = render_template(
@@ -497,7 +509,7 @@ class Agent:
             {
                 "task": state.task,
                 "matches": (
-                    [m.model_dump() for m in state.retrieved.matches]
+                    {i : m.model_dump() for i, m in enumerate(state.retrieved.matches)}
                     if state.retrieved is not None
                     else []
                 )
@@ -527,8 +539,34 @@ class Agent:
             schema=decide_schema
         )
 
-        # Note: retrieve_steps is incremented in _retrieve, not here.
-        update = {"decision": result["arguments"]}
+        # Filter out relevant matches if specified
+        decision = result["arguments"]
+        relevant_indices = decision.get("relevant_match_indices", [])
+
+        # Create a set of relevant indices for O(1) lookup
+        relevant_set = set(relevant_indices)
+
+        # Keep only matches whose indices are in the relevant set
+        filtered_matches = [
+            match for i, match in enumerate(state.retrieved.matches)
+            if i in relevant_set
+        ]
+
+        # Update the retrieved object with filtered matches
+        filtered_retrieved = state.retrieved
+        filtered_retrieved.matches = filtered_matches
+
+        self._debug(
+            "DECIDE / FILTERED MATCHES",
+            original_count=len(state.retrieved.matches),
+            filtered_count=len(filtered_matches),
+            included_indices=relevant_indices
+        )
+
+        update = {
+            "decision": decision,
+            "retrieved": filtered_retrieved
+        }
 
         if self.verbose and "decision" not in update:
             print("[WARN] DECIDE did not update `decision`")

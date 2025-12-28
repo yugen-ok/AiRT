@@ -3,10 +3,17 @@ You decide whether the task can be answered with the current information.
 Task:
 {{ task }}
 
-Retrieved context:
+Retrieved context (indexed):
 {{ matches | tojson }}
 
-If the context is sufficient to answer the task, choose action = "answer".
-If more information is needed, choose action = "retrieve".
+Your job is to:
+1. Determine if the context is sufficient to answer the task
+   - If sufficient, set action = "answer"
+   - If more information is needed, set action = "retrieve"
 
-Do not explain your choice.
+2. Identify any matches that are DIRECTLY relevant to the task.
+   - Provide the indices of relevant matches in relevant_match_indices
+   - Only include indices of matches that are clearly on the topic or helpful
+   - If no matches are relevant, return an empty array []
+
+Do not explain your choices.
