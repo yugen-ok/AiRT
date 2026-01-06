@@ -526,7 +526,7 @@ class SQLDB(DB):
             Sanitized name (lowercase, alphanumeric + underscores only)
 
         Example:
-            >>> _sanitize_name("Sales Data 2023!.csv")
+            _sanitize_name("Sales Data 2023!.csv")
             'sales_data_2023_csv'
         """
         name = name.lower()

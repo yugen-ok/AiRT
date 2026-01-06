@@ -40,10 +40,9 @@ agent = Agent(
     # model="gemini-2.5-flash",
     # model='claude-3-opus-20240229',
     retrieve_tools=[tfidf_tool],
-    max_retrieve_steps=10,
-    max_retrieved_chars = 10000,
+    max_retrieve_steps=3,
     verbose=True,
-    # log_path="agent_debug.log",
+    log_path="output/agent_debug.log",
 )
 
 # ---------------------------------------------------------
