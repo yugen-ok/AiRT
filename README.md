@@ -283,7 +283,7 @@ it will recognize them automatically.
 AiRT intentionally leaves space for:
 
 * Checkpointing and threading
-* Create a function that encapsulates query_llm with some tools + retrieving raw tool ouput, rather than doing it within Agent._retrieve. It is just architectural, not functional.
+* Create a function that encapsulates query_llm with some tools + retrieving raw tool ouput, rather than doing it within Agent._retrieve (and then Agent._retrieve would use that function). It is just architectural, not functional.
 * Caching the output of each step for traceability
 * Hierarchical topic-based filtering
 * Evaluation / scoring
