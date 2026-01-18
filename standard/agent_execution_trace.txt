@@ -1,0 +1,693 @@
+================================================================================
+KEY INVOKE METHODS IN EXECUTION ORDER
+================================================================================
+
+================================================================================
+Class: langchain_classic.agents.agent.AgentExecutor
+Method: langchain_classic.agents.agent.AgentExecutor.invoke
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\langchain_classic\chains\base.py
+================================================================================
+    @override
+    def invoke(
+        self,
+        input: dict[str, Any],
+        config: RunnableConfig | None = None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        config = ensure_config(config)
+        callbacks = config.get("callbacks")
+        tags = config.get("tags")
+        metadata = config.get("metadata")
+        run_name = config.get("run_name") or self.get_name()
+        run_id = config.get("run_id")
+        include_run_info = kwargs.get("include_run_info", False)
+        return_only_outputs = kwargs.get("return_only_outputs", False)
+
+        inputs = self.prep_inputs(input)
+        callback_manager = CallbackManager.configure(
+            callbacks,
+            self.callbacks,
+            self.verbose,
+            tags,
+            self.tags,
+            metadata,
+            self.metadata,
+        )
+        new_arg_supported = inspect.signature(self._call).parameters.get("run_manager")
+
+        run_manager = callback_manager.on_chain_start(
+            None,
+            inputs,
+            run_id,
+            name=run_name,
+        )
+        try:
+            self._validate_inputs(inputs)
+            outputs = (
+                self._call(inputs, run_manager=run_manager)
+                if new_arg_supported
+                else self._call(inputs)
+            )
+
+            final_outputs: dict[str, Any] = self.prep_outputs(
+                inputs,
+                outputs,
+                return_only_outputs,
+            )
+        except BaseException as
+
+
+================================================================================
+Class: langchain_core.prompts.prompt.PromptTemplate
+Method: langchain_core.prompts.prompt.PromptTemplate.invoke
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\langchain_core\prompts\base.py
+================================================================================
+    @override
+    def invoke(
+        self, input: dict, config: RunnableConfig | None = None, **kwargs: Any
+    ) -> PromptValue:
+        """Invoke the prompt.
+
+        Args:
+            input: Input to the prompt.
+            config: Configuration for the prompt.
+
+        Returns:
+            The output of the prompt.
+        """
+        config = ensure_config(config)
+        if self.metadata:
+            config["metadata"] = {**config["metadata"], **self.metadata}
+        if self.tags:
+            config["tags"] += self.tags
+        return self._call_with_config(
+            self._format_prompt_with_error_handling,
+            input,
+            config,
+            run_type="prompt",
+            serialized=self._serialized,
+        )
+
+
+
+================================================================================
+Class: langchain_classic.agents.output_parsers.react_single_input.ReActSingleInputOutputParser
+Method: langchain_classic.agents.output_parsers.react_single_input.ReActSingleInputOutputParser.invoke
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\langchain_core\output_parsers\base.py
+================================================================================
+    @override
+    def invoke(
+        self,
+        input: str | BaseMessage,
+        config: RunnableConfig | None = None,
+        **kwargs: Any,
+    ) -> T:
+        if isinstance(input, BaseMessage):
+            return self._call_with_config(
+                lambda inner_input: self.parse_result(
+                    [ChatGeneration(message=inner_input)]
+                ),
+                input,
+                config,
+                run_type="parser",
+            )
+        return self._call_with_config(
+            lambda inner_input: self.parse_result([Generation(text=inner_input)]),
+            input,
+            config,
+            run_type="parser",
+        )
+
+
+
+================================================================================
+OPENAI/LLM RELATED METHODS
+================================================================================
+
+Class: langchain_openai.chat_models.base.ChatOpenAI
+Method: langchain_openai.chat_models.base.ChatOpenAI.stream
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\langchain_core\language_models\chat_models.py
+----------------------------------------
+
+Class: langchain_openai.chat_models.base.ChatOpenAI
+Method: langchain_openai.chat_models.base.ChatOpenAI._should_stream
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\langchain_core\language_models\chat_models.py
+----------------------------------------
+
+Class: langchain_openai.chat_models.base.ChatOpenAI
+Method: langchain_openai.chat_models.base.ChatOpenAI._convert_input
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\langchain_core\language_models\chat_models.py
+----------------------------------------
+
+Class: langchain_openai.chat_models.base.ChatOpenAI
+Method: langchain_openai.chat_models.base.ChatOpenAI._get_invocation_params
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\langchain_openai\chat_models\base.py
+----------------------------------------
+
+Class: langchain_openai.chat_models.base.ChatOpenAI
+Method: langchain_openai.chat_models.base.ChatOpenAI._get_invocation_params
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\langchain_core\language_models\chat_models.py
+----------------------------------------
+
+Class: langchain_openai.chat_models.base.ChatOpenAI
+Method: langchain_openai.chat_models.base.ChatOpenAI.dict
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\langchain_core\language_models\chat_models.py
+----------------------------------------
+
+Class: langchain_openai.chat_models.base.ChatOpenAI
+Method: langchain_openai.chat_models.base.ChatOpenAI._identifying_params
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\langchain_openai\chat_models\base.py
+----------------------------------------
+
+Class: langchain_openai.chat_models.base.ChatOpenAI
+Method: langchain_openai.chat_models.base.ChatOpenAI._default_params
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\langchain_openai\chat_models\base.py
+----------------------------------------
+
+Class: langchain_openai.chat_models.base.ChatOpenAI
+Method: langchain_openai.chat_models.base.ChatOpenAI._default_params
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\langchain_openai\chat_models\base.py
+----------------------------------------
+
+Class: langchain_openai.chat_models.base.ChatOpenAI
+Method: langchain_openai.chat_models.base.ChatOpenAI._llm_type
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\langchain_openai\chat_models\base.py
+----------------------------------------
+
+Class: langchain_openai.chat_models.base.ChatOpenAI
+Method: langchain_openai.chat_models.base.ChatOpenAI._get_ls_params
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\langchain_openai\chat_models\base.py
+----------------------------------------
+
+Class: langchain_openai.chat_models.base.ChatOpenAI
+Method: langchain_openai.chat_models.base.ChatOpenAI._stream
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\langchain_openai\chat_models\base.py
+----------------------------------------
+
+Class: langchain_openai.chat_models.base.ChatOpenAI
+Method: langchain_openai.chat_models.base.ChatOpenAI._use_responses_api
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\langchain_openai\chat_models\base.py
+----------------------------------------
+
+Class: langchain_openai.chat_models.base.ChatOpenAI
+Method: langchain_openai.chat_models.base.ChatOpenAI._stream
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\langchain_openai\chat_models\base.py
+----------------------------------------
+
+Class: langchain_openai.chat_models.base.ChatOpenAI
+Method: langchain_openai.chat_models.base.ChatOpenAI._ensure_sync_client_available
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\langchain_openai\chat_models\base.py
+----------------------------------------
+
+Class: langchain_openai.chat_models.base.ChatOpenAI
+Method: langchain_openai.chat_models.base.ChatOpenAI._should_stream_usage
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\langchain_openai\chat_models\base.py
+----------------------------------------
+
+Class: langchain_openai.chat_models.base.ChatOpenAI
+Method: langchain_openai.chat_models.base.ChatOpenAI._get_request_payload
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\langchain_openai\chat_models\base.py
+----------------------------------------
+
+Class: langchain_openai.chat_models.base.ChatOpenAI
+Method: langchain_openai.chat_models.base.ChatOpenAI._get_request_payload
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\langchain_openai\chat_models\base.py
+----------------------------------------
+
+Class: langchain_core.prompt_values.ChatPromptValue
+Method: langchain_core.prompt_values.ChatPromptValue.to_messages
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\langchain_core\prompt_values.py
+----------------------------------------
+
+Class: openai.resources.chat.completions.completions.Completions
+Method: openai.resources.chat.completions.completions.Completions.create
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\openai\resources\chat\completions\completions.py
+----------------------------------------
+
+Class: openai.OpenAI
+Method: openai.OpenAI.post
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\openai\_base_client.py
+----------------------------------------
+
+Class: openai._models.FinalRequestOptions
+Method: openai._models.FinalRequestOptions.construct
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\openai\_models.py
+----------------------------------------
+
+Class: openai._models.FinalRequestOptions
+Method: openai._models.FinalRequestOptions.model_construct
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\pydantic\main.py
+----------------------------------------
+
+Class: openai.NotGiven
+Method: openai.NotGiven.__bool__
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\openai\_types.py
+----------------------------------------
+
+Class: openai.NotGiven
+Method: openai.NotGiven.__newobj__
+File: C:\Users\Yugen\AppData\Local\Python\pythoncore-3.14-64\Lib\copyreg.py
+----------------------------------------
+
+Class: openai.OpenAI
+Method: openai.OpenAI.request
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\openai\_base_client.py
+----------------------------------------
+
+Class: openai.OpenAI
+Method: openai.OpenAI._maybe_override_cast_to
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\openai\_base_client.py
+----------------------------------------
+
+Class: openai._models.FinalRequestOptions
+Method: openai._models.FinalRequestOptions.model_copy
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\pydantic\main.py
+----------------------------------------
+
+Class: openai._models.FinalRequestOptions
+Method: openai._models.FinalRequestOptions.__copy__
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\pydantic\main.py
+----------------------------------------
+
+Class: openai.OpenAI
+Method: openai.OpenAI._idempotency_key
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\openai\_base_client.py
+----------------------------------------
+
+Class: openai._models.FinalRequestOptions
+Method: openai._models.FinalRequestOptions.__setattr__
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\pydantic\main.py
+----------------------------------------
+
+Class: openai._models.FinalRequestOptions
+Method: openai._models.FinalRequestOptions.get_max_retries
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\openai\_models.py
+----------------------------------------
+
+Class: openai.OpenAI
+Method: openai.OpenAI._prepare_options
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\openai\_client.py
+----------------------------------------
+
+Class: openai.OpenAI
+Method: openai.OpenAI._refresh_api_key
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\openai\_client.py
+----------------------------------------
+
+Class: openai.OpenAI
+Method: openai.OpenAI._prepare_options
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\openai\_base_client.py
+----------------------------------------
+
+Class: openai.OpenAI
+Method: openai.OpenAI._build_request
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\openai\_base_client.py
+----------------------------------------
+
+Class: openai.OpenAI
+Method: openai.OpenAI._build_headers
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\openai\_base_client.py
+----------------------------------------
+
+Class: openai.OpenAI
+Method: openai.OpenAI.default_headers
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\openai\_client.py
+----------------------------------------
+
+Class: openai.OpenAI
+Method: openai.OpenAI.default_headers
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\openai\_base_client.py
+----------------------------------------
+
+Class: openai.OpenAI
+Method: openai.OpenAI.user_agent
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\openai\_base_client.py
+----------------------------------------
+
+Class: openai.OpenAI
+Method: openai.OpenAI.platform_headers
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\openai\_base_client.py
+----------------------------------------
+
+Class: openai.OpenAI
+Method: openai.OpenAI.auth_headers
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\openai\_client.py
+----------------------------------------
+
+Class: openai.OpenAI
+Method: openai.OpenAI._validate_headers
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\openai\_base_client.py
+----------------------------------------
+
+Class: openai.OpenAI
+Method: openai.OpenAI.default_query
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\openai\_base_client.py
+----------------------------------------
+
+Class: openai.OpenAI
+Method: openai.OpenAI._prepare_url
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\openai\_base_client.py
+----------------------------------------
+
+Class: openai.OpenAI
+Method: openai.OpenAI.base_url
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\openai\_base_client.py
+----------------------------------------
+
+Class: langchain_openai.chat_models._client_utils._SyncHttpxClientWrapper
+Method: langchain_openai.chat_models._client_utils._SyncHttpxClientWrapper.build_request
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\httpx\_client.py
+----------------------------------------
+
+Class: langchain_openai.chat_models._client_utils._SyncHttpxClientWrapper
+Method: langchain_openai.chat_models._client_utils._SyncHttpxClientWrapper._merge_url
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\httpx\_client.py
+----------------------------------------
+
+Class: langchain_openai.chat_models._client_utils._SyncHttpxClientWrapper
+Method: langchain_openai.chat_models._client_utils._SyncHttpxClientWrapper._merge_headers
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\httpx\_client.py
+----------------------------------------
+
+Class: langchain_openai.chat_models._client_utils._SyncHttpxClientWrapper
+Method: langchain_openai.chat_models._client_utils._SyncHttpxClientWrapper.headers
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\httpx\_client.py
+----------------------------------------
+
+Class: langchain_openai.chat_models._client_utils._SyncHttpxClientWrapper
+Method: langchain_openai.chat_models._client_utils._SyncHttpxClientWrapper._merge_cookies
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\httpx\_client.py
+----------------------------------------
+
+Class: langchain_openai.chat_models._client_utils._SyncHttpxClientWrapper
+Method: langchain_openai.chat_models._client_utils._SyncHttpxClientWrapper.cookies
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\httpx\_client.py
+----------------------------------------
+
+Class: langchain_openai.chat_models._client_utils._SyncHttpxClientWrapper
+Method: langchain_openai.chat_models._client_utils._SyncHttpxClientWrapper._merge_queryparams
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\httpx\_client.py
+----------------------------------------
+
+Class: langchain_openai.chat_models._client_utils._SyncHttpxClientWrapper
+Method: langchain_openai.chat_models._client_utils._SyncHttpxClientWrapper.params
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\httpx\_client.py
+----------------------------------------
+
+Class: openai.Timeout
+Method: openai.Timeout.__init__
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\httpx\_config.py
+----------------------------------------
+
+Class: openai.Timeout
+Method: openai.Timeout.as_dict
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\httpx\_config.py
+----------------------------------------
+
+Class: openai.OpenAI
+Method: openai.OpenAI._prepare_request
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\openai\_base_client.py
+----------------------------------------
+
+Class: openai.OpenAI
+Method: openai.OpenAI.custom_auth
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\openai\_base_client.py
+----------------------------------------
+
+Class: langchain_openai.chat_models._client_utils._SyncHttpxClientWrapper
+Method: langchain_openai.chat_models._client_utils._SyncHttpxClientWrapper.send
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\httpx\_client.py
+----------------------------------------
+
+Class: langchain_openai.chat_models._client_utils._SyncHttpxClientWrapper
+Method: langchain_openai.chat_models._client_utils._SyncHttpxClientWrapper._set_timeout
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\httpx\_client.py
+----------------------------------------
+
+Class: langchain_openai.chat_models._client_utils._SyncHttpxClientWrapper
+Method: langchain_openai.chat_models._client_utils._SyncHttpxClientWrapper._build_request_auth
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\httpx\_client.py
+----------------------------------------
+
+Class: langchain_openai.chat_models._client_utils._SyncHttpxClientWrapper
+Method: langchain_openai.chat_models._client_utils._SyncHttpxClientWrapper._send_handling_auth
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\httpx\_client.py
+----------------------------------------
+
+Class: langchain_openai.chat_models._client_utils._SyncHttpxClientWrapper
+Method: langchain_openai.chat_models._client_utils._SyncHttpxClientWrapper._send_handling_redirects
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\httpx\_client.py
+----------------------------------------
+
+Class: langchain_openai.chat_models._client_utils._SyncHttpxClientWrapper
+Method: langchain_openai.chat_models._client_utils._SyncHttpxClientWrapper._send_single_request
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\httpx\_client.py
+----------------------------------------
+
+Class: langchain_openai.chat_models._client_utils._SyncHttpxClientWrapper
+Method: langchain_openai.chat_models._client_utils._SyncHttpxClientWrapper._transport_for_url
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\httpx\_client.py
+----------------------------------------
+
+Class: openai.OpenAI
+Method: openai.OpenAI._process_response
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\openai\_base_client.py
+----------------------------------------
+
+Class: openai._response.APIResponse
+Method: openai._response.APIResponse.__init__
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\openai\_response.py
+----------------------------------------
+
+Class: openai._response.APIResponse
+Method: openai._response.APIResponse.parse
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\openai\_response.py
+----------------------------------------
+
+Class: openai._response.APIResponse
+Method: openai._response.APIResponse._parse
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\openai\_response.py
+----------------------------------------
+
+Class: openai.Stream
+Method: openai.Stream.__init__
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\openai\_streaming.py
+----------------------------------------
+
+Class: openai.OpenAI
+Method: openai.OpenAI._make_sse_decoder
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\openai\_base_client.py
+----------------------------------------
+
+Class: openai._streaming.SSEDecoder
+Method: openai._streaming.SSEDecoder.__init__
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\openai\_streaming.py
+----------------------------------------
+
+Class: openai.Stream
+Method: openai.Stream.__enter__
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\openai\_streaming.py
+----------------------------------------
+
+Class: openai.Stream
+Method: openai.Stream.__iter__
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\openai\_streaming.py
+----------------------------------------
+
+Class: openai.Stream
+Method: openai.Stream.__stream__
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\openai\_streaming.py
+----------------------------------------
+
+Class: openai.Stream
+Method: openai.Stream._iter_events
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\openai\_streaming.py
+----------------------------------------
+
+Class: openai._streaming.SSEDecoder
+Method: openai._streaming.SSEDecoder.iter_bytes
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\openai\_streaming.py
+----------------------------------------
+
+Class: openai._streaming.SSEDecoder
+Method: openai._streaming.SSEDecoder._iter_chunks
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\openai\_streaming.py
+----------------------------------------
+
+Class: openai._streaming.SSEDecoder
+Method: openai._streaming.SSEDecoder.decode
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\openai\_streaming.py
+----------------------------------------
+
+Class: openai._streaming.ServerSentEvent
+Method: openai._streaming.ServerSentEvent.__init__
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\openai\_streaming.py
+----------------------------------------
+
+Class: openai._streaming.ServerSentEvent
+Method: openai._streaming.ServerSentEvent.data
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\openai\_streaming.py
+----------------------------------------
+
+Class: openai._streaming.ServerSentEvent
+Method: openai._streaming.ServerSentEvent.event
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\openai\_streaming.py
+----------------------------------------
+
+Class: openai._streaming.ServerSentEvent
+Method: openai._streaming.ServerSentEvent.json
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\openai\_streaming.py
+----------------------------------------
+
+Class: openai.OpenAI
+Method: openai.OpenAI._process_response_data
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\openai\_base_client.py
+----------------------------------------
+
+Class: openai._types.ModelBuilderProtocol
+Method: openai._types.ModelBuilderProtocol.__subclasscheck__
+File: C:\Users\Yugen\AppData\Local\Python\pythoncore-3.14-64\Lib\typing.py
+----------------------------------------
+
+Class: openai._models._ConfigProtocol
+Method: openai._models._ConfigProtocol.__instancecheck__
+File: C:\Users\Yugen\AppData\Local\Python\pythoncore-3.14-64\Lib\typing.py
+----------------------------------------
+
+Class: openai.types.chat.chat_completion_chunk.ChatCompletionChunk
+Method: openai.types.chat.chat_completion_chunk.ChatCompletionChunk.model_fields
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\pydantic\main.py
+----------------------------------------
+
+Class: openai.types.chat.chat_completion_chunk.ChoiceDelta
+Method: openai.types.chat.chat_completion_chunk.ChoiceDelta._get_extra_fields_type
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\openai\_models.py
+----------------------------------------
+
+Class: openai.types.chat.chat_completion_chunk.ChatCompletionChunk
+Method: openai.types.chat.chat_completion_chunk.ChatCompletionChunk.model_dump
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\pydantic\main.py
+----------------------------------------
+
+Class: langchain_openai.chat_models.base.ChatOpenAI
+Method: langchain_openai.chat_models.base.ChatOpenAI._convert_chunk_to_generation_chunk
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\langchain_openai\chat_models\base.py
+----------------------------------------
+
+Class: langchain_core.outputs.chat_generation.ChatGenerationChunk
+Method: langchain_core.outputs.chat_generation.ChatGenerationChunk.set_text
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\langchain_core\outputs\chat_generation.py
+----------------------------------------
+
+Class: langchain_core.callbacks.manager.CallbackManagerForLLMRun
+Method: langchain_core.callbacks.manager.CallbackManagerForLLMRun.on_llm_new_token
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\langchain_core\callbacks\manager.py
+----------------------------------------
+
+Class: openai.Stream
+Method: openai.Stream.__exit__
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\openai\_streaming.py
+----------------------------------------
+
+Class: openai.Stream
+Method: openai.Stream.close
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\openai\_streaming.py
+----------------------------------------
+
+Class: langchain_core.outputs.chat_generation.ChatGenerationChunk
+Method: langchain_core.outputs.chat_generation.ChatGenerationChunk.__add__
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\langchain_core\outputs\chat_generation.py
+----------------------------------------
+
+Class: langchain_core.callbacks.manager.CallbackManagerForLLMRun
+Method: langchain_core.callbacks.manager.CallbackManagerForLLMRun.on_llm_end
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\langchain_core\callbacks\manager.py
+----------------------------------------
+
+================================================================================
+POTENTIAL LLM EXECUTION METHODS
+================================================================================
+
+Class: openai.resources.chat.completions.completions.Completions
+Method: openai.resources.chat.completions.completions.Completions.create
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\openai\resources\chat\completions\completions.py
+    @required_args(["messages", "model"], ["messages", "model", "stream"])
+    def create(
+        self,
+        *,
+        messages: Iterable[ChatCompletionMessageParam],
+        model: Union[str, ChatModel],
+        audio: Optional[ChatCompletionAudioParam] | Omit = omit,
+        frequency_penalty: Optional[float] | Omit = omit,
+        function_call: completion_create_params.FunctionCall | Omit = omit,
+        functions: Iterable[completion_create_params.Function] | Omit = omit,
+        logit_bias: Optional[Dict[str, int]] | Omit = omit,
+        logprobs: Optional[bool] | Omit = omit,
+        max_completion_tokens: Optional[int] | Omit = omit,
+        max_tokens: Optional[int] | Omit = omit,
+        metadata: Optional[Metadata] | Omit = omit,
+        modalities: Optional[List[Literal["t
+--------------------------------------------------------------------------------
+
+Class: openai.types.chat.chat_completion_chunk.ChatCompletionChunk
+Method: openai.types.chat.chat_completion_chunk.ChatCompletionChunk.model_fields
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\pydantic\main.py
+    @_utils.deprecated_instance_property
+    @classmethod
+    def model_fields(cls) -> dict[str, FieldInfo]:
+        """A mapping of field names to their respective [`FieldInfo`][pydantic.fields.FieldInfo] instances.
+
+        !!! warning
+            Accessing this attribute from a model instance is deprecated, and will not work in Pydantic V3.
+            Instead, you should access this attribute from the model class.
+        """
+        return getattr(cls, '__pydantic_fields__', {})
+
+--------------------------------------------------------------------------------
+
+Class: openai.types.chat.chat_completion_chunk.ChoiceDelta
+Method: openai.types.chat.chat_completion_chunk.ChoiceDelta._get_extra_fields_type
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\openai\_models.py
+def _get_extra_fields_type(cls: type[pydantic.BaseModel]) -> type | None:
+    if PYDANTIC_V1:
+        # TODO
+        return None
+
+    schema = cls.__pydantic_core_schema__
+    if schema["type"] == "model":
+        fields = schema["schema"]
+        if fields["type"] == "model-fields":
+            extras = fields.get("extras_schema")
+            if extras and "cls" in extras:
+                # mypy can't narrow the type
+                return extras["cls"]  # type: ignore[no-any-return]
+
+    return None
+
+--------------------------------------------------------------------------------
+
+Class: openai.types.chat.chat_completion_chunk.ChatCompletionChunk
+Method: openai.types.chat.chat_completion_chunk.ChatCompletionChunk.model_dump
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\pydantic\main.py
+    def model_dump(
+        self,
+        *,
+        mode: Literal['json', 'python'] | str = 'python',
+        include: IncEx | None = None,
+        exclude: IncEx | None = None,
+        context: Any | None = None,
+        by_alias: bool | None = None,
+        exclude_unset: bool = False,
+        exclude_defaults: bool = False,
+        exclude_none: bool = False,
+        exclude_computed_fields: bool = False,
+        round_trip: bool = False,
+        warnings: bool | Literal['none', 'warn', 'error'] = True,
+        fallback: Callable[[Any], Any] | None = None,
+        serialize_as_any: bool = False,
+    ) -> dict[str, Any]:
+        """!!! abstract "Usage Documentation"
+            [`model_dump`](../concepts/serialization.md#python-mode)
+
+        Generate a dictionary representation of the 
+--------------------------------------------------------------------------------

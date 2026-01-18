@@ -1,0 +1,596 @@
+Name: langchain_classic.agents.agent.AgentExecutor.invoke
+Class: langchain_classic.agents.agent.AgentExecutor
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\langchain_classic\chains\base.py
+-------------------------
+Source:
+
+     @override
+    def invoke(
+        self,
+        input: dict[str, Any],
+        config: RunnableConfig | None = None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        config = ensure_config(config)
+        callbacks = config.get("callbacks")
+        tags = config.get("tags")
+        metadata = config.get("metadata")
+        run_name = config.get("run_name") or self.get_name()
+        run_id = config.get("run_id")
+        include_run_info = kwargs.get("include_run_info", False)
+        return_only_outputs = kwargs.get("return_only_outputs", False)
+
+        inputs = self.prep_inputs(input)
+        callback_manager = CallbackManager.configure(
+            callbacks,
+            self.callbacks,
+            self.verbose,
+            tags,
+            self.tags,
+            metadata,
+            self.metadata,
+        )
+        new_arg_supported = inspect.signature(self._call).parameters.get("run_manager")
+
+        run_manager = callback_manager.on_chain_start(
+            None,
+            inputs,
+            run_id,
+            name=run_name,
+        )
+        try:
+            self._validate_inputs(inputs)
+            outputs = (
+                self._call(inputs, run_manager=run_manager)
+                if new_arg_supported
+                else self._call(inputs)
+            )
+
+            final_outputs: dict[str, Any] = self.prep_outputs(
+                inputs,
+                outputs,
+                return_only_outputs,
+            )
+        except BaseException as e:
+            run_manager.on_chain_error(e)
+            raise
+        run_manager.on_chain_end(outputs)
+
+        if include_run_info:
+            final_outputs[RUN_KEY] = RunInfo(run_id=run_manager.run_id)
+        return final_outputs
+
+=========================
+
+Name: langchain_classic.agents.agent.AgentExecutor.get_name
+Class: langchain_classic.agents.agent.AgentExecutor
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\langchain_core\runnables\base.py
+-------------------------
+Source:
+
+     def get_name(self, suffix: str | None = None, *, name: str | None = None) -> str:
+        """Get the name of the `Runnable`.
+
+        Args:
+            suffix: An optional suffix to append to the name.
+            name: An optional name to use instead of the `Runnable`'s name.
+
+        Returns:
+            The name of the `Runnable`.
+        """
+        if name:
+            name_ = name
+        elif hasattr(self, "name") and self.name:
+            name_ = self.name
+        else:
+            # Here we handle a case where the runnable subclass is also a pydantic
+            # model.
+            cls = self.__class__
+            # Then it's a pydantic sub-class, and we have to check
+            # whether it's a generic, and if so recover the original name.
+            if (
+                hasattr(
+                    cls,
+                    "__pydantic_generic_metadata__",
+                )
+                and "origin" in cls.__pydantic_generic_metadata__
+                and cls.__pydantic_generic_metadata__["origin"] is not None
+            ):
+                name_ = cls.__pydantic_generic_metadata__["origin"].__name__
+            else:
+                name_ = cls.__name__
+
+        if suffix:
+            if name_[0].isupper():
+                return name_ + suffix.title()
+            return name_ + "_" + suffix.lower()
+        return name_
+
+=========================
+
+Name: langchain_classic.agents.agent.AgentExecutor.prep_inputs
+Class: langchain_classic.agents.agent.AgentExecutor
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\langchain_classic\chains\base.py
+-------------------------
+Source:
+
+     def prep_inputs(self, inputs: dict[str, Any] | Any) -> dict[str, str]:
+        """Prepare chain inputs, including adding inputs from memory.
+
+        Args:
+            inputs: Dictionary of raw inputs, or single input if chain expects
+                only one param. Should contain all inputs specified in
+                `Chain.input_keys` except for inputs that will be set by the chain's
+                memory.
+
+        Returns:
+            A dictionary of all inputs, including those added by the chain's memory.
+        """
+        if not isinstance(inputs, dict):
+            _input_keys = set(self.input_keys)
+            if self.memory is not None:
+                # If there are multiple input keys, but some get set by memory so that
+                # only one is not set, we can still figure out which key it is.
+                _input_keys = _input_keys.difference(self.memory.memory_variables)
+            inputs = {next(iter(_input_keys)): inputs}
+        if self.memory is not None:
+            external_context = self.memory.load_memory_variables(inputs)
+            inputs = dict(inputs, **external_context)
+        return inputs
+
+=========================
+
+Name: langchain_classic.agents.agent.AgentExecutor.input_keys
+Class: langchain_classic.agents.agent.AgentExecutor
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\langchain_classic\agents\agent.py
+-------------------------
+Source:
+
+     @property
+    def input_keys(self) -> list[str]:
+        """Return the input keys."""
+        return self._action_agent.input_keys
+
+=========================
+
+Name: langchain_classic.agents.agent.AgentExecutor._action_agent
+Class: langchain_classic.agents.agent.AgentExecutor
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\langchain_classic\agents\agent.py
+-------------------------
+Source:
+
+     @property
+    def _action_agent(self) -> BaseSingleActionAgent | BaseMultiActionAgent:
+        """Type cast self.agent.
+
+        If the `agent` attribute is a Runnable, it will be converted one of
+        RunnableAgentType in the validate_runnable_agent root_validator.
+
+        To support instantiating with a Runnable, here we explicitly cast the type
+        to reflect the changes made in the root_validator.
+        """
+        if isinstance(self.agent, Runnable):
+            return cast("RunnableAgentType", self.agent)
+        return self.agent
+
+=========================
+
+Name: langchain_classic.agents.agent.AgentExecutor._validate_inputs
+Class: langchain_classic.agents.agent.AgentExecutor
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\langchain_classic\chains\base.py
+-------------------------
+Source:
+
+     def _validate_inputs(self, inputs: Any) -> None:
+        """Check that all inputs are present."""
+        if not isinstance(inputs, dict):
+            _input_keys = set(self.input_keys)
+            if self.memory is not None:
+                # If there are multiple input keys, but some get set by memory so that
+                # only one is not set, we can still figure out which key it is.
+                _input_keys = _input_keys.difference(self.memory.memory_variables)
+            if len(_input_keys) != 1:
+                msg = (
+                    f"A single string input was passed in, but this chain expects "
+                    f"multiple inputs ({_input_keys}). When a chain expects "
+                    f"multiple inputs, please call it by passing in a dictionary, "
+                    "eg `chain({'foo': 1, 'bar': 2})`"
+                )
+                raise ValueError(msg)
+
+        missing_keys = set(self.input_keys).difference(inputs)
+        if missing_keys:
+            msg = f"Missing some input keys: {missing_keys}"
+            raise ValueError(msg)
+
+=========================
+
+Name: langchain_classic.agents.agent.AgentExecutor._call
+Class: langchain_classic.agents.agent.AgentExecutor
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\langchain_classic\agents\agent.py
+-------------------------
+Source:
+
+     def _call(
+        self,
+        inputs: dict[str, str],
+        run_manager: CallbackManagerForChainRun | None = None,
+    ) -> dict[str, Any]:
+        """Run text through and get agent response."""
+        # Construct a mapping of tool name to tool for easy lookup
+        name_to_tool_map = {tool.name: tool for tool in self.tools}
+        # We construct a mapping from each tool to a color, used for logging.
+        color_mapping = get_color_mapping(
+            [tool.name for tool in self.tools],
+            excluded_colors=["green", "red"],
+        )
+        intermediate_steps: list[tuple[AgentAction, str]] = []
+        # Let's start tracking the number of iterations and time elapsed
+        iterations = 0
+        time_elapsed = 0.0
+        start_time = time.time()
+        # We now enter the agent loop (until it returns something).
+        while self._should_continue(iterations, time_elapsed):
+            next_step_output = self._take_next_step(
+                name_to_tool_map,
+                color_mapping,
+                inputs,
+                intermediate_steps,
+                run_manager=run_manager,
+            )
+            if isinstance(next_step_output, AgentFinish):
+                return self._return(
+                    next_step_output,
+                    intermediate_steps,
+                    run_manager=run_manager,
+                )
+
+            intermediate_steps.extend(next_step_output)
+            if len(next_step_output) == 1:
+                next_step_action = next_step_output[0]
+                # See if tool should return directly
+                tool_return = self._get_tool_return(next_step_action)
+                if tool_return is not None:
+                    return self._return(
+                        tool_return,
+                        intermediate_steps,
+                        run_manager=run_manager,
+                    )
+            iterations += 1
+            time_elapsed = time.time() - start_time
+        output = self._action_agent.return_stopped_response(
+            self.early_stopping_method,
+            intermediate_steps,
+            **inputs,
+        )
+        return self._return(output, intermediate_steps, run_manager=run_manager)
+
+=========================
+
+Name: langchain_classic.agents.agent.AgentExecutor._should_continue
+Class: langchain_classic.agents.agent.AgentExecutor
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\langchain_classic\agents\agent.py
+-------------------------
+Source:
+
+     def _should_continue(self, iterations: int, time_elapsed: float) -> bool:
+        if self.max_iterations is not None and iterations >= self.max_iterations:
+            return False
+        return self.max_execution_time is None or time_elapsed < self.max_execution_time
+
+=========================
+
+Name: langchain_classic.agents.agent.AgentExecutor._take_next_step
+Class: langchain_classic.agents.agent.AgentExecutor
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\langchain_classic\agents\agent.py
+-------------------------
+Source:
+
+     def _take_next_step(
+        self,
+        name_to_tool_map: dict[str, BaseTool],
+        color_mapping: dict[str, str],
+        inputs: dict[str, str],
+        intermediate_steps: list[tuple[AgentAction, str]],
+        run_manager: CallbackManagerForChainRun | None = None,
+    ) -> AgentFinish | list[tuple[AgentAction, str]]:
+        return self._consume_next_step(
+            list(
+                self._iter_next_step(
+                    name_to_tool_map,
+                    color_mapping,
+                    inputs,
+                    intermediate_steps,
+                    run_manager,
+                ),
+            ),
+        )
+
+=========================
+
+Name: langchain_classic.agents.agent.AgentExecutor._iter_next_step
+Class: langchain_classic.agents.agent.AgentExecutor
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\langchain_classic\agents\agent.py
+-------------------------
+Source:
+
+     def _iter_next_step(
+        self,
+        name_to_tool_map: dict[str, BaseTool],
+        color_mapping: dict[str, str],
+        inputs: dict[str, str],
+        intermediate_steps: list[tuple[AgentAction, str]],
+        run_manager: CallbackManagerForChainRun | None = None,
+    ) -> Iterator[AgentFinish | AgentAction | AgentStep]:
+        """Take a single step in the thought-action-observation loop.
+
+        Override this to take control of how the agent makes and acts on choices.
+        """
+        try:
+            intermediate_steps = self._prepare_intermediate_steps(intermediate_steps)
+
+            # Call the LLM to see what to do.
+            output = self._action_agent.plan(
+                intermediate_steps,
+                callbacks=run_manager.get_child() if run_manager else None,
+                **inputs,
+            )
+        except OutputParserException as e:
+            if isinstance(self.handle_parsing_errors, bool):
+                raise_error = not self.handle_parsing_errors
+            else:
+                raise_error = False
+            if raise_error:
+                msg = (
+                    "An output parsing error occurred. "
+                    "In order to pass this error back to the agent and have it try "
+                    "again, pass `handle_parsing_errors=True` to the AgentExecutor. "
+                    f"This is the error: {e!s}"
+                )
+                raise ValueError(msg) from e
+            text = str(e)
+            if isinstance(self.handle_parsing_errors, bool):
+                if e.send_to_llm:
+                    observation = str(e.observation)
+                    text = str(e.llm_output)
+                else:
+                    observation = "Invalid or incomplete response"
+            elif isinstance(self.handle_parsing_errors, str):
+                observation = self.handle_parsing_errors
+            elif callable(self.handle_parsing_errors):
+                observation = self.handle_parsing_errors(e)
+            else:
+                msg = "Got unexpected type of `handle_parsing_errors`"  # type: ignore[unreachable]
+                raise ValueError(msg) from e  # noqa: TRY004
+            output = AgentAction("_Exception", observation, text)
+            if run_manager:
+                run_manager.on_agent_action(output, color="green")
+            tool_run_kwargs = self._action_agent.tool_run_logging_kwargs()
+            observation = ExceptionTool().run(
+                output.tool_input,
+                verbose=self.verbose,
+                color=None,
+                callbacks=run_manager.get_child() if run_manager else None,
+                **tool_run_kwargs,
+            )
+            yield AgentStep(action=output, observation=observation)
+            return
+
+        # If the tool chosen is the finishing tool, then we end and return.
+        if isinstance(output, AgentFinish):
+            yield output
+            return
+
+        actions: list[AgentAction]
+        actions = [output] if isinstance(output, AgentAction) else output
+        for agent_action in actions:
+            yield agent_action
+        for agent_action in actions:
+            yield self._perform_agent_action(
+                name_to_tool_map,
+                color_mapping,
+                agent_action,
+                run_manager,
+            )
+
+=========================
+
+Name: langchain_classic.agents.agent.AgentExecutor._prepare_intermediate_steps
+Class: langchain_classic.agents.agent.AgentExecutor
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\langchain_classic\agents\agent.py
+-------------------------
+Source:
+
+     def _prepare_intermediate_steps(
+        self,
+        intermediate_steps: list[tuple[AgentAction, str]],
+    ) -> list[tuple[AgentAction, str]]:
+        if (
+            isinstance(self.trim_intermediate_steps, int)
+            and self.trim_intermediate_steps > 0
+        ):
+            return intermediate_steps[-self.trim_intermediate_steps :]
+        if callable(self.trim_intermediate_steps):
+            return self.trim_intermediate_steps(intermediate_steps)
+        return intermediate_steps
+
+=========================
+
+Name: langchain_classic.agents.agent.AgentExecutor._perform_agent_action
+Class: langchain_classic.agents.agent.AgentExecutor
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\langchain_classic\agents\agent.py
+-------------------------
+Source:
+
+     def _perform_agent_action(
+        self,
+        name_to_tool_map: dict[str, BaseTool],
+        color_mapping: dict[str, str],
+        agent_action: AgentAction,
+        run_manager: CallbackManagerForChainRun | None = None,
+    ) -> AgentStep:
+        if run_manager:
+            run_manager.on_agent_action(agent_action, color="green")
+        # Otherwise we lookup the tool
+        if agent_action.tool in name_to_tool_map:
+            tool = name_to_tool_map[agent_action.tool]
+            return_direct = tool.return_direct
+            color = color_mapping[agent_action.tool]
+            tool_run_kwargs = self._action_agent.tool_run_logging_kwargs()
+            if return_direct:
+                tool_run_kwargs["llm_prefix"] = ""
+            # We then call the tool on the tool input to get an observation
+            observation = tool.run(
+                agent_action.tool_input,
+                verbose=self.verbose,
+                color=color,
+                callbacks=run_manager.get_child() if run_manager else None,
+                **tool_run_kwargs,
+            )
+        else:
+            tool_run_kwargs = self._action_agent.tool_run_logging_kwargs()
+            observation = InvalidTool().run(
+                {
+                    "requested_tool_name": agent_action.tool,
+                    "available_tool_names": list(name_to_tool_map.keys()),
+                },
+                verbose=self.verbose,
+                color=None,
+                callbacks=run_manager.get_child() if run_manager else None,
+                **tool_run_kwargs,
+            )
+        return AgentStep(action=agent_action, observation=observation)
+
+=========================
+
+Name: langchain_classic.agents.agent.AgentExecutor._consume_next_step
+Class: langchain_classic.agents.agent.AgentExecutor
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\langchain_classic\agents\agent.py
+-------------------------
+Source:
+
+     def _consume_next_step(
+        self,
+        values: NextStepOutput,
+    ) -> AgentFinish | list[tuple[AgentAction, str]]:
+        if isinstance(values[-1], AgentFinish):
+            if len(values) != 1:
+                msg = "Expected a single AgentFinish output, but got multiple values."
+                raise ValueError(msg)
+            return values[-1]
+        return [(a.action, a.observation) for a in values if isinstance(a, AgentStep)]
+
+=========================
+
+Name: langchain_classic.agents.agent.AgentExecutor._get_tool_return
+Class: langchain_classic.agents.agent.AgentExecutor
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\langchain_classic\agents\agent.py
+-------------------------
+Source:
+
+     def _get_tool_return(
+        self,
+        next_step_output: tuple[AgentAction, str],
+    ) -> AgentFinish | None:
+        """Check if the tool is a returning tool."""
+        agent_action, observation = next_step_output
+        name_to_tool_map = {tool.name: tool for tool in self.tools}
+        return_value_key = "output"
+        if len(self._action_agent.return_values) > 0:
+            return_value_key = self._action_agent.return_values[0]
+        # Invalid tools won't be in the map, so we return False.
+        if (
+            agent_action.tool in name_to_tool_map
+            and name_to_tool_map[agent_action.tool].return_direct
+        ):
+            return AgentFinish(
+                {return_value_key: observation},
+                "",
+            )
+        return None
+
+=========================
+
+Name: langchain_classic.agents.agent.AgentExecutor._return
+Class: langchain_classic.agents.agent.AgentExecutor
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\langchain_classic\agents\agent.py
+-------------------------
+Source:
+
+     def _return(
+        self,
+        output: AgentFinish,
+        intermediate_steps: list,
+        run_manager: CallbackManagerForChainRun | None = None,
+    ) -> dict[str, Any]:
+        if run_manager:
+            run_manager.on_agent_finish(output, color="green", verbose=self.verbose)
+        final_output = output.return_values
+        if self.return_intermediate_steps:
+            final_output["intermediate_steps"] = intermediate_steps
+        return final_output
+
+=========================
+
+Name: langchain_classic.agents.agent.AgentExecutor.prep_outputs
+Class: langchain_classic.agents.agent.AgentExecutor
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\langchain_classic\chains\base.py
+-------------------------
+Source:
+
+     def prep_outputs(
+        self,
+        inputs: dict[str, str],
+        outputs: dict[str, str],
+        return_only_outputs: bool = False,  # noqa: FBT001,FBT002
+    ) -> dict[str, str]:
+        """Validate and prepare chain outputs, and save info about this run to memory.
+
+        Args:
+            inputs: Dictionary of chain inputs, including any inputs added by chain
+                memory.
+            outputs: Dictionary of initial chain outputs.
+            return_only_outputs: Whether to only return the chain outputs. If `False`,
+                inputs are also added to the final outputs.
+
+        Returns:
+            A dict of the final chain outputs.
+        """
+        self._validate_outputs(outputs)
+        if self.memory is not None:
+            self.memory.save_context(inputs, outputs)
+        if return_only_outputs:
+            return outputs
+        return {**inputs, **outputs}
+
+=========================
+
+Name: langchain_classic.agents.agent.AgentExecutor._validate_outputs
+Class: langchain_classic.agents.agent.AgentExecutor
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\langchain_classic\chains\base.py
+-------------------------
+Source:
+
+     def _validate_outputs(self, outputs: dict[str, Any]) -> None:
+        missing_keys = set(self.output_keys).difference(outputs)
+        if missing_keys:
+            msg = f"Missing some output keys: {missing_keys}"
+            raise ValueError(msg)
+
+=========================
+
+Name: langchain_classic.agents.agent.AgentExecutor.output_keys
+Class: langchain_classic.agents.agent.AgentExecutor
+File: C:\Users\Yugen\AppData\Roaming\Python\Python314\site-packages\langchain_classic\agents\agent.py
+-------------------------
+Source:
+
+     @property
+    def output_keys(self) -> list[str]:
+        """Return the singular output key."""
+        if self.return_intermediate_steps:
+            return [*self._action_agent.return_values, "intermediate_steps"]
+        return self._action_agent.return_values
+
+=========================
+
