@@ -6,7 +6,7 @@ from pathlib import Path
 from langchain_openai import ChatOpenAI
 from langchain_experimental.agents import create_pandas_dataframe_agent
 
-from scratch.source_tracer import print_source
+from agent_code_explorer.source_tracer import print_source
 from source_tracer import capture_runtime_sources
 
 # Create a simple sample dataframe
